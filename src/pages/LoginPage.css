@@ -1,0 +1,136 @@
+.login-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 32px 24px 48px;
+  box-sizing: border-box;
+}
+
+.login-card {
+  width: 100%;
+  max-width: none;
+  background: var(--card-bg);
+  color: var(--card-text);
+  border-radius: 12px;
+  padding: 32px 28px 28px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.12),
+    0 10px 24px -4px rgba(0, 0, 0, 0.18);
+  text-align: left;
+}
+
+.login-card__heading {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--card-text);
+}
+
+.login-card__lead {
+  margin: 0 0 24px;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--card-text-muted);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.login-form__error {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.login-form__label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--card-text);
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+
+.login-form__label:first-of-type {
+  margin-top: 0;
+}
+
+.login-form__input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 11px 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--card-text);
+  box-sizing: border-box;
+  width: 100%;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.login-form__input::placeholder {
+  color: var(--card-text-muted);
+  opacity: 0.85;
+}
+
+.login-form__input:hover {
+  border-color: var(--input-border-hover);
+}
+
+.login-form__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.login-form__submit {
+  margin-top: 28px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+
+.login-form__submit:hover {
+  background: var(--accent-hover);
+}
+
+.login-form__submit:active {
+  transform: scale(0.98);
+}
+
+.login-form__submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .login-page {
+    padding: 24px 16px 40px;
+  }
+
+  .login-card {
+    padding: 24px 20px 22px;
+  }
+}

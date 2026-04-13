@@ -1,0 +1,102 @@
+:root {
+  /* Fondo general: azul oscuro (base de toda la app) */
+  --page-bg: #0f2744;
+  --page-bg-subtle: #0c1f36;
+  --header-bg: #0a1f35;
+  --header-border: rgba(255, 255, 255, 0.08);
+
+  --text-on-dark: #f0f4f8;
+  --text-on-dark-muted: rgba(240, 244, 248, 0.72);
+
+  /* Tarjetas / formulario: blanco sobre el azul */
+  --card-bg: #ffffff;
+  --card-text: #152238;
+  --card-text-muted: #5c6578;
+
+  --input-border: #d8dde6;
+  --input-border-hover: #b8c0ce;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-ring: rgba(37, 99, 235, 0.25);
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  --main-bg: #ffffff;
+  --main-text: #152238;
+
+  /* Marco del bloque home (al tono del app bar) */
+  --home-frame-border: #2a4a6e;
+  --home-frame-outer: rgba(15, 39, 68, 0.06);
+  /* Grilla de tablas: mismas divisiones fila/columna */
+  --table-grid: var(--home-frame-border);
+
+  font: 16px/145% var(--sans);
+  letter-spacing: 0.01em;
+  color: var(--main-text);
+  background: var(--main-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    font-size: 15px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100svh;
+  background: var(--main-bg);
+}
+
+#root {
+  min-height: 100svh;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  text-align: initial;
+  border: none;
+}
+
+.app-shell {
+  width: 100%;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: var(--main-bg);
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--main-bg);
+  color: var(--main-text);
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
