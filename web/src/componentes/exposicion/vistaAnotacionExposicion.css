@@ -1,43 +1,25 @@
-.enrollment-modal__backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(10, 31, 53, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  box-sizing: border-box;
-  overflow: auto;
-}
-
-.enrollment-modal {
-  width: min(96vw, 1680px);
-  max-width: 100%;
-  min-height: min(88svh, 900px);
-  max-height: 94svh;
-  margin: auto;
+/* Página de anotación (flujo completo; sin marco tipo modal). */
+.anotacion-page {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--card-bg);
-  border: 2px solid var(--home-frame-border);
-  border-radius: 12px;
-  box-shadow:
-    0 0 0 4px var(--home-frame-outer),
-    0 12px 40px rgba(10, 31, 53, 0.2);
+  gap: 12px;
+  min-height: 0;
+  width: 100%;
   color: var(--card-text);
   text-align: left;
 }
 
-.enrollment-modal__header {
+.anotacion-page .enrollment-modal__header {
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px 14px;
+  padding: 0 0 14px;
+  margin: 0;
   border-bottom: 1px solid var(--input-border);
-  background: #f8fafc;
+  background: transparent;
 }
 
 .enrollment-modal__title {
@@ -54,7 +36,15 @@
   color: var(--card-text-muted);
 }
 
-.enrollment-modal__close {
+.enrollment-modal__subtitle-dates {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--card-text);
+  letter-spacing: 0.01em;
+}
+
+.anotacion-page .enrollment-modal__close {
   flex-shrink: 0;
   width: 36px;
   height: 36px;
@@ -67,25 +57,27 @@
   color: var(--card-text-muted);
 }
 
-.enrollment-modal__close:hover {
+.anotacion-page .enrollment-modal__close:hover {
   background: #f1f5f9;
   color: var(--card-text);
 }
 
-.enrollment-modal__section {
-  padding: 14px 24px 18px;
-  border-bottom: 1px solid var(--input-border);
+.anotacion-page .enrollment-modal__section {
   flex-shrink: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--home-frame-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 4px rgba(15, 39, 68, 0.06);
 }
 
-.enrollment-modal__section--table {
-  border-bottom: none;
+.anotacion-page .enrollment-modal__section--table {
   display: flex;
   flex-direction: column;
   gap: 10px;
   flex: 1;
   min-height: 0;
-  padding-bottom: 20px;
+  padding-bottom: 12px;
 }
 
 .enrollment-modal__section-title {
@@ -227,14 +219,86 @@
   padding: 9px 12px;
 }
 
-@media (max-width: 900px) {
-  .enrollment-modal {
-    width: 100%;
-    min-height: auto;
-    max-height: none;
-  }
+.enrollment-modal__th-actions {
+  width: 1%;
+  text-align: right;
+}
 
-  .enrollment-modal__table-wrap {
+.enrollment-modal__td-actions {
+  width: 1%;
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.enrollment-modal__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.enrollment-modal__btn--compact {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.enrollment-modal__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: #fff;
+  color: var(--card-text-muted);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.enrollment-modal__icon-btn:hover {
+  background: #f8fafc;
+  border-color: var(--input-border-hover);
+  color: var(--card-text);
+}
+
+.enrollment-modal__icon-btn--edit:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-ring);
+}
+
+.enrollment-modal__icon-btn--delete:hover {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.enrollment-modal__action-icon {
+  display: block;
+}
+
+.enrollment-modal__input--inline {
+  width: 100%;
+  min-width: 4rem;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 0.8125rem;
+  padding: 4px 8px;
+}
+
+.enrollment-modal__cell-readonly {
+  color: var(--card-text-muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 900px) {
+  .anotacion-page .enrollment-modal__table-wrap {
     min-height: 240px;
     max-height: 55svh;
   }

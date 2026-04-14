@@ -6,7 +6,7 @@ const TEST_USERS = [
     username: 'user',
     password: '1234',
     role: 'user',
-    /** Kennel (perrera) al que pertenece; solo ve exhibiciones de ese kennel. */
+    /** Kennel (perrera) al que pertenece; solo ve exposiciones de ese kennel. */
     kennelId: 'club-fca-norte',
   },
   {

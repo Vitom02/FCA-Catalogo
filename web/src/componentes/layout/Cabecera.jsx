@@ -1,4 +1,4 @@
-import './AppHeader.css'
+import './Cabecera.css'
 
 function userInitial(username) {
   const u = username.trim()
@@ -11,7 +11,7 @@ function roleLabel(role) {
   return 'Usuario'
 }
 
-export function AppHeader({ session, onLogout }) {
+export function Cabecera({ session, onLogout }) {
   return (
     <header className="app-header" role="banner">
       <div className="app-header__inner">

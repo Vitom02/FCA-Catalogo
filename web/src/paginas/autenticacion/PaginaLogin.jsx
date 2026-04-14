@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { authenticate, saveSession } from '../auth/testAuth.js'
-import './LoginPage.css'
+import { authenticate, saveSession } from '../../autenticacion/testAuth.js'
+import './PaginaLogin.css'
 
-export function LoginPage({ onLoggedIn }) {
+export function PaginaLogin({ onLoggedIn }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -23,9 +23,6 @@ export function LoginPage({ onLoggedIn }) {
     <div className="login-page">
       <div className="login-card">
         <h1 className="login-card__heading">Iniciar sesión</h1>
-        <p className="login-card__lead">
-          Accedé para gestionar exhibiciones y el catálogo de ejemplares.
-        </p>
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           {error ? (
             <p className="login-form__error" role="alert">
@@ -43,7 +40,7 @@ export function LoginPage({ onLoggedIn }) {
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="usuario"
+            placeholder="Ingrese tu usuario"
           />
           <label className="login-form__label" htmlFor="login-password">
             Contraseña
@@ -56,7 +53,7 @@ export function LoginPage({ onLoggedIn }) {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="Ingrese tu contraseña"
           />
           <button type="submit" className="login-form__submit">
             Entrar
