@@ -9,7 +9,8 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    # PG 17+ para pg_restore de dumps hechos con pg_dump reciente (formato 1.16).
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: kennel
