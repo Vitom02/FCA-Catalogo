@@ -66,9 +66,18 @@ export const EXHIBITION_TABLE_ROWS = [
 ]
 
 /** Nombre legible por id de kennel (perrera). */
-export const KENNEL_LABELS = {
-  'club-fca-norte': 'FCA Norte',
-  'club-fca-sur': 'FCA Sur',
+/**
+ * Misma regla que el listado: coincide por `kennelId` o por `id_club` (sesión con id numérico).
+ * @param {{ role: string, kennelId: string | null }} session
+ * @param {ExhibitionRow} row
+ */
+export function sessionMatchesExhibitionRow(session, row) {
+  if (session.role === 'superadmin') return true
+  if (!session.kennelId) return false
+  if (row.kennelId === session.kennelId) return true
+  const idClub = /** @type {{ id_club?: number }} */ (row).id_club
+  if (idClub != null && String(idClub) === session.kennelId) return true
+  return false
 }
 
 /**
@@ -80,7 +89,7 @@ export const KENNEL_LABELS = {
 export function filterExhibitionsByRole(rows, session) {
   if (session.role === 'superadmin') return rows
   if (!session.kennelId) return []
-  return rows.filter((r) => r.kennelId === session.kennelId)
+  return rows.filter((r) => sessionMatchesExhibitionRow(session, r))
 }
 
 /**
@@ -88,7 +97,11 @@ export function filterExhibitionsByRole(rows, session) {
  * @param {string} q
  * @returns {ExhibitionRow[]}
  */
-export function filterExhibitionsBySearch(rows, q, { includeKennelLabel } = {}) {
+export function filterExhibitionsBySearch(
+  rows,
+  q,
+  { includeKennelLabel, kennelLabels = {} } = {},
+) {
   const s = q.trim().toLowerCase()
   if (!s) return rows
   return rows.filter((row) => {
@@ -99,7 +112,7 @@ export function filterExhibitionsBySearch(rows, q, { includeKennelLabel } = {}) 
     )
     if (inColumns) return true
     if (includeKennelLabel) {
-      const label = KENNEL_LABELS[row.kennelId] ?? row.kennelId ?? ''
+      const label = kennelLabels[row.kennelId] ?? row.kennelId ?? ''
       return String(label).toLowerCase().includes(s)
     }
     return false

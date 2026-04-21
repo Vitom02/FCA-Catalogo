@@ -13,6 +13,8 @@ web/dist
 dist
 dist-ssr
 api/node_modules
+api/.env
+.env
 *.local
 
 # Editor directories and files

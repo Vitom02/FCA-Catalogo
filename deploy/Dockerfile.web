@@ -1,0 +1,24 @@
+# Build en raíz del repo: docker compose build web
+FROM node:20-bookworm-slim AS build
+
+WORKDIR /web
+
+COPY web/package.json web/package-lock.json* ./
+RUN npm ci
+
+COPY web/ ./
+
+ARG VITE_API_URL=
+ARG VITE_BASE=/
+
+RUN printf 'VITE_API_URL=%s\nVITE_BASE=%s\n' "$VITE_API_URL" "$VITE_BASE" > .env.production \
+  && npm run build
+
+FROM nginx:1.27-alpine
+
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /web/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

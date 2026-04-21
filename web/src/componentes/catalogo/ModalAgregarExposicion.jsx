@@ -1,6 +1,5 @@
 import { useEffect, useId, useState } from 'react'
 import {
-  KENNEL_LABELS,
   NUMERO_EXTRA_MAX,
   NUMERO_EXTRA_MIN,
   getExhibitionRowKey,
@@ -27,11 +26,16 @@ function rowToForm(row) {
   const extra = Number.isNaN(raw)
     ? NUMERO_EXTRA_MIN
     : Math.min(NUMERO_EXTRA_MAX, Math.max(NUMERO_EXTRA_MIN, raw))
+  const idClub = /** @type {{ id_club?: number }} */ (row).id_club
+  const kennelFromId =
+    idClub != null && Number.isFinite(Number(idClub))
+      ? String(idClub)
+      : String(row.kennelId ?? '').trim()
   return {
     nombre: String(row['Descripción'] ?? '').trim(),
     fechaInicio: String(row['Fecha inicio'] ?? '').trim(),
     fechaFin: String(row['Fecha fin'] ?? '').trim(),
-    kennelId: row.kennelId ?? '',
+    kennelId: kennelFromId,
     numero: String(row['Número'] ?? '').trim(),
     cantidad: String(row.Cantidad ?? '').trim(),
     numerosExtra: String(extra),
@@ -46,6 +50,7 @@ function rowToForm(row) {
  *   onSubmit: (row: import('../../datos/exhibitionsTable.js').ExhibitionRow) => void,
  *   existingRows: import('../../datos/exhibitionsTable.js').ExhibitionRow[],
  *   initialRow?: import('../../datos/exhibitionsTable.js').ExhibitionRow | null,
+ *   clubes?: { id_club: number, club: string }[],
  * }} props
  */
 export function ModalAgregarExposicion({
@@ -54,6 +59,7 @@ export function ModalAgregarExposicion({
   onSubmit,
   existingRows,
   initialRow = null,
+  clubes = [],
 }) {
   const titleId = useId()
   const [form, setForm] = useState(emptyForm)
@@ -193,16 +199,11 @@ export function ModalAgregarExposicion({
               <option value="" disabled>
                 Elegir club…
               </option>
-              {Object.keys(KENNEL_LABELS)
-                .slice()
-                .sort((a, b) =>
-                  String(KENNEL_LABELS[a]).localeCompare(String(KENNEL_LABELS[b]), 'es'),
-                )
-                .map((id) => (
-                  <option key={id} value={id}>
-                    {KENNEL_LABELS[id]}
-                  </option>
-                ))}
+              {clubes.map((c) => (
+                <option key={c.id_club} value={String(c.id_club)}>
+                  {c.club}
+                </option>
+              ))}
             </select>
           </label>
           <div className="expo-add-modal__row2">

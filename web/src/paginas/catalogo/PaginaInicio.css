@@ -129,31 +129,6 @@
   color: var(--card-text-muted);
 }
 
-.session-home__cell-link {
-  display: inline;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  font-size: inherit;
-  color: var(--accent);
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-align: left;
-}
-
-.session-home__cell-link:hover {
-  color: var(--accent-hover);
-}
-
-.session-home__cell-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
 .session-home__input,
 .session-home__select {
   font: inherit;
@@ -287,6 +262,22 @@
 .session-home__table tbody tr:last-child td:only-child {
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
+}
+
+.session-home__table tbody tr.session-home__row--clickable {
+  cursor: pointer;
+}
+
+.session-home__table tbody tr.session-home__row--clickable:hover td {
+  background: #f1f5f9;
+}
+
+.session-home__table tbody tr.session-home__row--clickable:focus-visible {
+  outline: none;
+}
+
+.session-home__table tbody tr.session-home__row--clickable:focus-visible td {
+  background: #e8eef5;
 }
 
 .session-home__th-actions {

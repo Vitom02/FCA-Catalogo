@@ -1,9 +1,11 @@
-import { Fragment, useCallback, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  listarCatalogosConteosPorExposicion,
+  listarExposicionesProximas,
+} from '../../apiConnect.jsx'
 import {
   EXHIBITION_TABLE_COLUMNS,
-  EXHIBITION_TABLE_ROWS,
-  KENNEL_LABELS,
   exhibitionInCalendarYear,
   filterExhibitionsByCatalogCriteria,
   filterExhibitionsByKennelId,
@@ -14,6 +16,14 @@ import {
 } from '../../datos/exhibitionsTable.js'
 import { ModalAgregarExposicion } from '../../componentes/catalogo/ModalAgregarExposicion.jsx'
 import { formatExhibitionColumnValue } from '../../utilidades/dateDisplay.js'
+import {
+  clubesSortedByName,
+  kennelLabelsFromClubes,
+} from '../../utilidades/mapClubesApi.js'
+import {
+  mapConteosCantidadEnFilas,
+  mapListaExposicionesApi,
+} from '../../utilidades/mapExposicionesApi.js'
 import './PaginaInicio.css'
 
 const MONTH_OPTIONS = [
@@ -40,6 +50,23 @@ const emptyFilters = () => ({
   kennelId: '',
   exposicionKey: '',
 })
+
+/** Clave interna para filas sin `club` en el JSON (null o vacío). */
+const GROUP_CLUB_NULL = '__sin_club__'
+
+/**
+ * Superadmin: agrupa por nombre de club del API; sin club → un solo bloque al final.
+ * @param {{ club?: string | null }} row
+ * @returns {{ key: string, title: string }}
+ */
+function clubGrupoSortKeyYTitulo(row) {
+  const c = row.club
+  if (c == null || String(c).trim() === '') {
+    return { key: GROUP_CLUB_NULL, title: 'Sin club' }
+  }
+  const title = String(c).trim()
+  return { key: title, title }
+}
 
 function IconPencil() {
   return (
@@ -90,13 +117,58 @@ function IconTrash() {
  *   session: { username: string, role: string, kennelId: string | null },
  *   exhibitionRows: import('../../datos/exhibitionsTable.js').ExhibitionRow[],
  *   setExhibitionRows: (next: unknown) => void,
+ *   clubes?: unknown[],
  * }} props
  */
-export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
+export function PaginaInicio({
+  session,
+  exhibitionRows,
+  setExhibitionRows,
+  clubes = [],
+}) {
+  const navigate = useNavigate()
+  const kennelLabels = useMemo(
+    () => kennelLabelsFromClubes(clubes),
+    [clubes],
+  )
+  const clubesOrdenados = useMemo(
+    () => clubesSortedByName(clubes),
+    [clubes],
+  )
   const [draft, setDraft] = useState(emptyFilters)
   const [applied, setApplied] = useState(emptyFilters)
   const [modalExpoAbierto, setModalExpoAbierto] = useState(false)
   const [modalExpoEditRow, setModalExpoEditRow] = useState(null)
+  /** @type {{ status: 'idle' | 'loading' | 'ok' | 'error', error: string | null }} */
+  const [expoLoad, setExpoLoad] = useState({ status: 'idle', error: null })
+
+  const cargarExposicionesProximas = useCallback(async () => {
+    setExpoLoad((s) => ({ ...s, status: 'loading', error: null }))
+    try {
+      const [data, conteos] = await Promise.all([
+        listarExposicionesProximas(),
+        listarCatalogosConteosPorExposicion().catch(() => []),
+      ])
+      const base = mapListaExposicionesApi(data)
+      setExhibitionRows(mapConteosCantidadEnFilas(base, conteos))
+      setExpoLoad({ status: 'ok', error: null })
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'No se pudieron cargar las exposiciones.'
+      setExpoLoad({ status: 'error', error: msg })
+    }
+  }, [setExhibitionRows])
+
+  useEffect(() => {
+    cargarExposicionesProximas()
+  }, [cargarExposicionesProximas])
+
+  const goToExposicion = useCallback(
+    (row) => {
+      navigate(`/exposicion/${encodeURIComponent(getExhibitionRowKey(row))}`)
+    },
+    [navigate],
+  )
 
   const isSuperadmin = session.role === 'superadmin'
 
@@ -167,21 +239,25 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
     if (!isSuperadmin) return null
     const map = new Map()
     for (const row of displayedRows) {
-      const kid = row.kennelId ?? ''
-      if (!map.has(kid)) map.set(kid, [])
-      map.get(kid).push(row)
+      const { key, title } = clubGrupoSortKeyYTitulo(row)
+      if (!map.has(key)) {
+        map.set(key, { title, rows: [] })
+      }
+      map.get(key).rows.push(row)
     }
-    const ids = [...map.keys()].sort((a, b) =>
-      String(KENNEL_LABELS[a] ?? a).localeCompare(
-        String(KENNEL_LABELS[b] ?? b),
-        'es',
-      ),
-    )
-    return ids.map((kennelId) => ({
-      kennelId,
-      label: KENNEL_LABELS[kennelId] ?? kennelId ?? '—',
-      rows: map.get(kennelId) ?? [],
-    }))
+    const keys = [...map.keys()].sort((a, b) => {
+      if (a === GROUP_CLUB_NULL) return 1
+      if (b === GROUP_CLUB_NULL) return -1
+      return String(a).localeCompare(String(b), 'es')
+    })
+    return keys.map((groupKey) => {
+      const bucket = map.get(groupKey)
+      return {
+        groupKey,
+        label: bucket.title,
+        rows: bucket.rows,
+      }
+    })
   }, [isSuperadmin, displayedRows])
 
   function handleBuscar(e) {
@@ -201,7 +277,7 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
   }
 
   function handleActualizar() {
-    setExhibitionRows(EXHIBITION_TABLE_ROWS.map((r) => ({ ...r })))
+    void cargarExposicionesProximas()
     const cleared = emptyFilters()
     setDraft(cleared)
     setApplied(cleared)
@@ -333,7 +409,7 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                     <option value="">Todas las perreras</option>
                     {kennelIdsInData.map((id) => (
                       <option key={id} value={id}>
-                        {KENNEL_LABELS[id] ?? id}
+                        {kennelLabels[id] ?? id}
                       </option>
                     ))}
                   </select>
@@ -356,7 +432,7 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                     </option>
                     {exposicionesEnPeriodo.map((row) => {
                       const key = getExhibitionRowKey(row)
-                      const kn = KENNEL_LABELS[row.kennelId] ?? row.kennelId ?? ''
+                      const kn = kennelLabels[row.kennelId] ?? row.kennelId ?? ''
                       const label = `N.º ${row['Número'] ?? '—'} · ${row['Descripción'] ?? '—'} (${kn})`
                       return (
                         <option key={key} value={key}>
@@ -376,8 +452,10 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                 type="button"
                 className="session-home__btn session-home__btn--secondary"
                 onClick={handleActualizar}
+                disabled={expoLoad.status === 'loading'}
+                aria-busy={expoLoad.status === 'loading'}
               >
-                Actualizar tabla
+                {expoLoad.status === 'loading' ? 'Actualizando…' : 'Actualizar lista'}
               </button>
             </div>
           </form>
@@ -391,6 +469,7 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
               onSubmit={handleGuardarExposicion}
               existingRows={exhibitionRows}
               initialRow={modalExpoEditRow}
+              clubes={clubesOrdenados}
             />
             <div className="session-home__toolbar">
               <button
@@ -428,7 +507,25 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                 </tr>
               </thead>
               <tbody>
-                {rowsForRole.length === 0 ? (
+                {expoLoad.status === 'loading' && exhibitionRows.length === 0 ? (
+                  <tr>
+                    <td
+                      className="session-home__empty"
+                      colSpan={tableColCount}
+                    >
+                      Cargando exposiciones…
+                    </td>
+                  </tr>
+                ) : expoLoad.status === 'error' && exhibitionRows.length === 0 ? (
+                  <tr>
+                    <td
+                      className="session-home__empty"
+                      colSpan={tableColCount}
+                    >
+                      {expoLoad.error ?? 'Error al cargar.'}
+                    </td>
+                  </tr>
+                ) : rowsForRole.length === 0 ? (
                   <tr>
                     <td
                       className="session-home__empty"
@@ -450,7 +547,7 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                   </tr>
                 ) : isSuperadmin && displayedRowsPorClub ? (
                   displayedRowsPorClub.map((grupo) => (
-                    <Fragment key={grupo.kennelId}>
+                    <Fragment key={grupo.groupKey}>
                       <tr className="session-home__club-group-row">
                         <th
                           className="session-home__club-group-heading"
@@ -467,31 +564,39 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                             <span className="session-home__club-inscriptos-label">
                               Cant Inscriptos:
                             </span>{' '}
-                            <span className="session-home__club-inscriptos-value" />
+                            <span className="session-home__club-inscriptos-value">
+                              {grupo.rows.reduce((sum, row) => {
+                                const n = Number(row.Cantidad)
+                                return sum + (Number.isFinite(n) ? n : 0)
+                              }, 0)}
+                            </span>
                           </span>
                         </td>
                       </tr>
                       {grupo.rows.map((row, i) => (
                         <tr
                           key={`${row.kennelId}-${row['Número']}-${row['Fecha inicio']}-${i}`}
+                          className="session-home__row--clickable"
+                          tabIndex={0}
+                          role="link"
+                          aria-label={`Abrir exposición ${row['Número'] ?? ''} ${row['Descripción'] ?? ''}`}
+                          onClick={() => goToExposicion(row)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              goToExposicion(row)
+                            }
+                          }}
                         >
-                          {visibleExhibitionColumns.map((col) =>
-                            col === 'Número' || col === 'Descripción' ? (
-                              <td key={col}>
-                                <Link
-                                  className="session-home__cell-link"
-                                  to={`/exposicion/${encodeURIComponent(getExhibitionRowKey(row))}`}
-                                >
-                                  {formatExhibitionColumnValue(col, row[col])}
-                                </Link>
-                              </td>
-                            ) : (
-                              <td key={col}>
-                                {formatExhibitionColumnValue(col, row[col])}
-                              </td>
-                            ),
-                          )}
-                          <td className="session-home__td-actions">
+                          {visibleExhibitionColumns.map((col) => (
+                            <td key={col}>
+                              {formatExhibitionColumnValue(col, row[col])}
+                            </td>
+                          ))}
+                          <td
+                            className="session-home__td-actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {isExhibitionPast(row) ? (
                               <span className="session-home__actions-muted">—</span>
                             ) : (
@@ -523,23 +628,25 @@ export function PaginaInicio({ session, exhibitionRows, setExhibitionRows }) {
                   ))
                 ) : (
                   displayedRows.map((row, i) => (
-                    <tr key={`${row.kennelId}-${row['Número']}-${row['Fecha inicio']}-${i}`}>
-                      {visibleExhibitionColumns.map((col) =>
-                        col === 'Número' || col === 'Descripción' ? (
-                          <td key={col}>
-                            <Link
-                              className="session-home__cell-link"
-                              to={`/exposicion/${encodeURIComponent(getExhibitionRowKey(row))}`}
-                            >
-                              {formatExhibitionColumnValue(col, row[col])}
-                            </Link>
-                          </td>
-                        ) : (
-                          <td key={col}>
-                            {formatExhibitionColumnValue(col, row[col])}
-                          </td>
-                        ),
-                      )}
+                    <tr
+                      key={`${row.kennelId}-${row['Número']}-${row['Fecha inicio']}-${i}`}
+                      className="session-home__row--clickable"
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Abrir exposición ${row['Número'] ?? ''} ${row['Descripción'] ?? ''}`}
+                      onClick={() => goToExposicion(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          goToExposicion(row)
+                        }
+                      }}
+                    >
+                      {visibleExhibitionColumns.map((col) => (
+                        <td key={col}>
+                          {formatExhibitionColumnValue(col, row[col])}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}

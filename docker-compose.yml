@@ -1,0 +1,53 @@
+# Despliegue completo: PostgreSQL + API Node + front (Nginx) con proxy /api → API.
+#
+# 1. cp .env.docker.example .env  y definí POSTGRES_PASSWORD
+# 2. docker compose up -d db
+# 3. docker compose run --rm api node scripts/migrate.mjs
+# 4. docker compose up -d
+#
+# Web en http://IP_O_DOMINIO  ·  API vía mismo host en /api/...  ·  /health para la API
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kennel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: kennel
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kennel -d kennel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      DATABASE_URL: postgresql://kennel:${POSTGRES_PASSWORD}@db:5432/kennel
+      PGSCHEMA: web
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_API_URL: ""
+        VITE_BASE: "/"
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

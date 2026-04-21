@@ -1,18 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { listarClubes } from './apiConnect.jsx'
 import { Cabecera } from './componentes/layout/Cabecera.jsx'
 import { PaginaLogin } from './paginas/autenticacion/PaginaLogin.jsx'
 import { PaginaInicio } from './paginas/catalogo/PaginaInicio.jsx'
 import { PaginaExposicion } from './paginas/exposicion/PaginaExposicion.jsx'
-import { EXHIBITION_TABLE_ROWS } from './datos/exhibitionsTable.js'
 import { clearSession, getSession } from './autenticacion/testAuth.js'
 
 function App() {
   const [session, setSession] = useState(() => getSession())
-  const [exhibitionRows, setExhibitionRows] = useState(() =>
-    EXHIBITION_TABLE_ROWS.map((r) => ({ ...r })),
-  )
+  const [exhibitionRows, setExhibitionRows] = useState(() => [])
   const [enrollmentsByExhibition, setEnrollmentsByExhibition] = useState({})
+  const [clubes, setClubes] = useState(() => [])
+
+  useEffect(() => {
+    let cancelled = false
+    listarClubes()
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) setClubes(data)
+      })
+      .catch(() => {
+        if (!cancelled) setClubes([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function handleLoggedIn(next) {
     setSession(next)
@@ -37,6 +50,7 @@ function App() {
                     session={session}
                     exhibitionRows={exhibitionRows}
                     setExhibitionRows={setExhibitionRows}
+                    clubes={clubes}
                   />
                 }
               />

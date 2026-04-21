@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ApiError } from '../../apiConnect.jsx'
 import { authenticate, saveSession } from '../../autenticacion/testAuth.js'
 import './PaginaLogin.css'
 
@@ -6,17 +7,31 @@ export function PaginaLogin({ onLoggedIn }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    const session = authenticate(username, password)
-    if (!session) {
-      setError('Usuario o contraseña incorrectos.')
-      return
+    setLoading(true)
+    try {
+      const session = await authenticate(username, password)
+      if (!session) {
+        setError('Usuario o contraseña incorrectos.')
+        return
+      }
+      saveSession(session)
+      onLoggedIn(session)
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudo conectar con el servidor.'
+      setError(msg)
+    } finally {
+      setLoading(false)
     }
-    saveSession(session)
-    onLoggedIn(session)
   }
 
   return (
@@ -55,8 +70,12 @@ export function PaginaLogin({ onLoggedIn }) {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Ingrese tu contraseña"
           />
-          <button type="submit" className="login-form__submit">
-            Entrar
+          <button
+            type="submit"
+            className="login-form__submit"
+            disabled={loading}
+          >
+            {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
       </div>
