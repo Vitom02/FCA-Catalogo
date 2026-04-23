@@ -17,7 +17,16 @@ const COLUMNS = [
   "latitud",
   "longitud",
   "ubicacion",
+  "cantidad",
+  "numeros_extra_razas",
+  "numeros_extra_cachorros",
 ];
+
+const COLUMNAS_ENTERAS_OPCIONALES = new Set([
+  "cantidad",
+  "numeros_extra_razas",
+  "numeros_extra_cachorros",
+]);
 
 /** Lecturas con nombre del club (JOIN clubes.club). */
 const SELECT_BASE = `
@@ -39,6 +48,9 @@ const SELECT_BASE = `
     e.latitud,
     e.longitud,
     e.ubicacion,
+    e.cantidad,
+    e.numeros_extra_razas,
+    e.numeros_extra_cachorros,
     cl.club AS club
   FROM exposiciones e
   LEFT JOIN clubes cl ON cl.id_club = e.id_club
@@ -115,6 +127,12 @@ function optNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function optIntNullable(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
 export async function crear(payload) {
   const {
     exposicion,
@@ -133,17 +151,22 @@ export async function crear(payload) {
     latitud,
     longitud,
     ubicacion,
+    cantidad,
+    numeros_extra_razas,
+    numeros_extra_cachorros,
   } = payload;
 
   const r = await query(
     `INSERT INTO exposiciones (
       exposicion, desde, hasta, id_club, id_tipo, ano, id_mes,
       organizador, texto1, texto2, texto3, texto4, texto5,
-      latitud, longitud, ubicacion
+      latitud, longitud, ubicacion,
+      cantidad, numeros_extra_razas, numeros_extra_cachorros
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7,
       $8, $9, $10, $11, $12, $13,
-      $14, $15, $16
+      $14, $15, $16,
+      $17, $18, $19
     )
     RETURNING id_exposicion`,
     [
@@ -163,6 +186,9 @@ export async function crear(payload) {
       optNum(latitud),
       optNum(longitud),
       optStr(ubicacion),
+      optIntNullable(cantidad),
+      optIntNullable(numeros_extra_razas),
+      optIntNullable(numeros_extra_cachorros),
     ]
   );
   return obtenerPorId(r.rows[0].id_exposicion);
@@ -179,7 +205,11 @@ export async function actualizar(idExposicion, payload) {
   for (const col of COLUMNS) {
     if (Object.prototype.hasOwnProperty.call(payload, col)) {
       updates.push(`${col} = $${i}`);
-      values.push(payload[col]);
+      let v = payload[col];
+      if (COLUMNAS_ENTERAS_OPCIONALES.has(col)) {
+        v = optIntNullable(v);
+      }
+      values.push(v);
       i += 1;
     }
   }

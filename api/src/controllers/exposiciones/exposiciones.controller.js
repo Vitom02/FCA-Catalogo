@@ -5,6 +5,23 @@ function parseId(raw) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+const CAMPOS_ENTEROS_OPCIONALES_EXPO = [
+  "cantidad",
+  "numeros_extra_razas",
+  "numeros_extra_cachorros",
+];
+
+function validarEnterosOpcionalesExpo(b) {
+  for (const k of CAMPOS_ENTEROS_OPCIONALES_EXPO) {
+    const v = b[k];
+    if (v === undefined || v === null || v === "") continue;
+    if (!Number.isFinite(Number(v))) {
+      return `El campo ${k} debe ser un número válido`;
+    }
+  }
+  return null;
+}
+
 function validarCrear(body) {
   const b = body ?? {};
   const nombre = String(b.exposicion ?? "").trim();
@@ -29,7 +46,7 @@ function validarCrear(body) {
     }
   }
 
-  return null;
+  return validarEnterosOpcionalesExpo(b);
 }
 
 export async function listar(_req, res) {
@@ -114,7 +131,13 @@ export async function actualizar(req, res) {
       res.status(404).json({ error: "Exposición no encontrada" });
       return;
     }
-    const row = await exposicionesService.actualizar(id, req.body ?? {});
+    const b = req.body ?? {};
+    const msgInt = validarEnterosOpcionalesExpo(b);
+    if (msgInt) {
+      res.status(400).json({ error: msgInt });
+      return;
+    }
+    const row = await exposicionesService.actualizar(id, b);
     res.json(row);
   } catch (err) {
     console.error(err);

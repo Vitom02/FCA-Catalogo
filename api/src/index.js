@@ -6,6 +6,7 @@ import * as clubesController from "./controllers/clubes/clubes.controller.js";
 import * as catalogosController from "./controllers/catalogos/catalogos.controller.js";
 import * as ejemplaresController from "./controllers/ejemplares/ejemplares.controller.js";
 import * as exposicionesController from "./controllers/exposiciones/exposiciones.controller.js";
+import * as exposicionesCatalogosController from "./controllers/exposiciones_catalogos/exposiciones_catalogos.controller.js";
 import * as healthController from "./controllers/health/health.controller.js";
 import * as usuariosController from "./controllers/usuarios/usuarios.controller.js";
 
@@ -29,6 +30,16 @@ app.get("/api/exposiciones/:id", exposicionesController.obtenerPorId);
 app.post("/api/exposiciones", exposicionesController.crear);
 app.put("/api/exposiciones/:id", exposicionesController.actualizar);
 app.delete("/api/exposiciones/:id", exposicionesController.eliminar);
+
+app.get(
+  "/api/exposiciones-catalogos/exposicion/:idExposicion",
+  exposicionesCatalogosController.listarPorExposicion
+);
+app.post("/api/exposiciones-catalogos", exposicionesCatalogosController.crear);
+app.delete(
+  "/api/exposiciones-catalogos/exposicion/:idExposicion/club/:idClub",
+  exposicionesCatalogosController.eliminar
+);
 
 app.get("/api/catalogos", catalogosController.listar);
 app.get("/api/catalogos/conteos", catalogosController.listarConteos);

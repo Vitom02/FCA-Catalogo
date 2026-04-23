@@ -25,6 +25,18 @@ export function mapExposicionApiToRow(api) {
   const kennelFromClub =
     idClub != null && !Number.isNaN(idClub) ? String(idClub) : ''
 
+  const cupoRaw = api.cantidad
+  const cupoLimite =
+    cupoRaw != null && cupoRaw !== '' && Number.isFinite(Number(cupoRaw))
+      ? Number(cupoRaw)
+      : null
+  const er = api.numeros_extra_razas
+  const ec = api.numeros_extra_cachorros
+  const extraRazas =
+    er != null && er !== '' && Number.isFinite(Number(er)) ? Number(er) : null
+  const extraCachorros =
+    ec != null && ec !== '' && Number.isFinite(Number(ec)) ? Number(ec) : null
+
   return {
     id_exposicion: idExpo ?? undefined,
     id_club: idClub,
@@ -35,8 +47,12 @@ export function mapExposicionApiToRow(api) {
     'Fecha inicio': desde,
     'Fecha fin': hasta,
     Cantidad: '—',
+    /** Valor de catálogo solo lectura en el modal (no viene de la API). */
     'Números extra': '1',
     Estado: 'Abierto',
+    cupo_limite: cupoLimite,
+    numeros_extra_razas: extraRazas,
+    numeros_extra_cachorros: extraCachorros,
   }
 }
 

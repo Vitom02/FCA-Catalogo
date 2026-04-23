@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   ApiError,
   actualizarCatalogo,
@@ -12,10 +12,7 @@ import {
   getExhibitionRowKey,
   sessionMatchesExhibitionRow,
 } from '../../datos/exhibitionsTable.js'
-import {
-  mapCatalogoDetalleToEnrollment,
-  siguienteNumeroCatalogoExposicion,
-} from '../../utilidades/mapCatalogoApi.js'
+import { mapCatalogoDetalleToEnrollment } from '../../utilidades/mapCatalogoApi.js'
 import '../catalogo/PaginaInicio.css'
 import './PaginaExposicion.css'
 
@@ -41,7 +38,6 @@ export function PaginaExposicion({
   setEnrollmentsByExhibition,
 }) {
   const { expoKey } = useParams()
-  const navigate = useNavigate()
   /** @type {'idle' | 'loading' | 'ok' | 'error'} */
   const [catalogosLoad, setCatalogosLoad] = useState('idle')
   const [catalogosError, setCatalogosError] = useState(/** @type {string | null} */ (null))
@@ -72,7 +68,7 @@ export function PaginaExposicion({
     (rows) => {
       setEnrollmentsByExhibition((prev) => ({
         ...prev,
-        [rowKey]: rows.map((r, i) => mapCatalogoDetalleToEnrollment(r, i)),
+        [rowKey]: rows.map((r) => mapCatalogoDetalleToEnrollment(r)),
       }))
     },
     [rowKey, setEnrollmentsByExhibition],
@@ -115,10 +111,6 @@ export function PaginaExposicion({
 
   const enrollments = enrollmentsByExhibition[rowKey] ?? []
 
-  function handleBack() {
-    navigate('/')
-  }
-
   async function handleAddEnrollment(entry) {
     const idUsuario = session.id_usuario
     const idCat = entry.id_categoria
@@ -137,13 +129,11 @@ export function PaginaExposicion({
       return
     }
     try {
-      const numero = siguienteNumeroCatalogoExposicion(enrollments)
       await crearCatalogo({
         id_exposicion: idExposicion,
         id_ejemplar: idEj,
         id_categoria: idCat,
         id_usuario: idUsuario,
-        numero,
       })
       await refreshCatalogos()
     } catch (e) {
@@ -216,7 +206,6 @@ export function PaginaExposicion({
         exhibition={exhibition}
         session={session}
         enrollments={enrollments}
-        onBack={handleBack}
         onAddEnrollment={handleAddEnrollment}
         onUpdateEnrollment={handleUpdateEnrollment}
         onRemoveEnrollment={handleRemoveEnrollment}

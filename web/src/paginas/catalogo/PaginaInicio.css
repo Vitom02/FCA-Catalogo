@@ -418,7 +418,7 @@
   padding: 20px 14px !important;
 }
 
-/* Modal alta exposición (superadmin) */
+/* Modal alta exposición (superadmin) — compacto, sin scroll interno */
 .expo-add-modal__backdrop {
   position: fixed;
   inset: 0;
@@ -427,140 +427,235 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 12px;
   box-sizing: border-box;
-  overflow: auto;
 }
 
 .expo-add-modal {
-  width: min(100%, 440px);
-  max-height: min(92vh, 640px);
-  overflow: auto;
+  width: min(100%, 400px);
   display: flex;
   flex-direction: column;
   background: var(--card-bg);
   border: 1px solid var(--home-frame-border);
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow:
-    0 0 0 3px var(--home-frame-outer),
-    0 16px 48px rgba(10, 31, 53, 0.22);
+    0 0 0 2px var(--home-frame-outer),
+    0 12px 32px rgba(10, 31, 53, 0.18);
   color: var(--card-text);
   text-align: left;
 }
 
-.expo-add-modal__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 12px;
+.expo-add-modal--compact {
+  max-height: none;
+  overflow: visible;
+}
+
+.expo-add-modal__head--compact {
+  padding: 10px 12px 8px;
+  gap: 8px;
   border-bottom: 1px solid var(--input-border);
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.expo-add-modal__title {
+.expo-add-modal__title--compact {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 0.9375rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
-.expo-add-modal__close {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  background: #fff;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
+.expo-add-modal__id-tag {
+  margin-left: 6px;
+  font-weight: 600;
+  font-size: 0.8125rem;
   color: var(--card-text-muted);
 }
 
-.expo-add-modal__close:hover {
+.expo-add-modal__close--compact {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--card-text-muted);
+  flex-shrink: 0;
+}
+
+.expo-add-modal__close--compact:hover {
   background: #f1f5f9;
   color: var(--card-text);
 }
 
-.expo-add-modal__form {
+.expo-add-modal__form--compact {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 18px 18px;
+  gap: 8px;
+  padding: 10px 12px 12px;
 }
 
-.expo-add-modal__field {
+.expo-add-modal__field--compact {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .expo-add-modal__label {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--card-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.expo-add-modal__input,
+.expo-add-modal__input--compact,
 .expo-add-modal__select {
   font: inherit;
-  font-size: 0.875rem;
-  padding: 7px 10px;
+  font-size: 0.8125rem;
+  padding: 5px 8px;
   border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: #fff;
   color: var(--card-text);
   box-sizing: border-box;
   width: 100%;
 }
 
+.expo-add-modal__input--num {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.expo-add-modal__input--num::-webkit-outer-spin-button,
+.expo-add-modal__input--num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .expo-add-modal__input:focus,
 .expo-add-modal__select:focus {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 0;
   border-color: var(--accent);
 }
 
-.expo-add-modal__row2 {
+.expo-add-modal__row2--compact {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 12px;
+  gap: 8px;
 }
 
-@media (max-width: 400px) {
-  .expo-add-modal__row2 {
-    grid-template-columns: 1fr;
-  }
+.expo-add-modal__row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
 }
 
-.expo-add-modal__check {
+.expo-add-modal__club-grid {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 0.875rem;
-  line-height: 1.4;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.expo-add-modal__club-grid-row {
+  display: grid;
+  grid-template-columns: 1fr 34px;
+  gap: 6px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.expo-add-modal__club-grid-row--principal {
+  grid-template-columns: 1fr 34px;
+}
+
+.expo-add-modal__club-grid-spacer {
+  display: block;
+}
+
+.expo-add-modal__btn-minus {
+  flex-shrink: 0;
+  width: 34px;
+  padding: 0;
+  border: 1px solid var(--input-border);
+  border-radius: 5px;
+  background: #fff;
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--card-text);
+}
+
+.expo-add-modal__btn-minus:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.expo-add-modal__btn-minus:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.expo-add-modal__btn-add-club-row {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 5px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--card-text);
+}
+
+.expo-add-modal__btn-add-club-row:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.expo-add-modal__btn-add-club-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.expo-add-modal__check--compact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
   cursor: pointer;
   user-select: none;
+  margin: 0;
 }
 
-.expo-add-modal__check input {
-  margin-top: 2px;
-  width: 1.1rem;
-  height: 1.1rem;
+.expo-add-modal__check--compact input {
+  width: 0.95rem;
+  height: 0.95rem;
   accent-color: var(--accent);
   cursor: pointer;
-  flex-shrink: 0;
 }
 
-.expo-add-modal__actions {
+.expo-add-modal__actions--compact {
   display: flex;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-  padding-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--input-border);
+}
+
+@media (max-width: 360px) {
+  .expo-add-modal__row3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {

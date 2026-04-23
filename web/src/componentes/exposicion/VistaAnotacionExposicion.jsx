@@ -1,10 +1,11 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   ApiError,
   buscarEjemplares,
   listarCategoriasEjemplares,
   listarFederacionesEjemplares,
   listarRazasEjemplares,
+  obtenerEjemplarPorId,
 } from '../../apiConnect.jsx'
 import { ENROLLMENT_TABLE_COLUMNS } from '../../datos/specimens.js'
 import { formatExhibitionDateRange, formatTableDate } from '../../utilidades/dateDisplay.js'
@@ -18,27 +19,36 @@ import {
   ejemplarBusquedaApiToEnrollment,
   normalizeSexoEjemplarApi,
 } from '../../utilidades/mapEjemplarApi.js'
+import {
+  BusquedaSelectTipo,
+  matchUnicoEtiqueta,
+  normalizarBusqueda,
+} from '../comun/BusquedaSelectTipo.jsx'
 import './vistaAnotacionExposicion.css'
 
+/** Misma convención que `ID_FEDERACION_FCA` en la API de ejemplares. */
+const ID_FEDERACION_FCA_DEFAULT = 1
+
 const COLUMN_LABELS = {
-  'id ejemplar': 'ID ejemplar',
+  numero: 'N.º catálogo',
   nombre: 'Nombre',
-  sexo: 'Sexo',
-  federacion: 'Cod. federación',
-  categoria: 'Categoría',
-  raza: 'Cod. raza',
-  ordinal: 'Ordinal',
+  raza: 'Raza',
+  federacion: 'Federación',
   registro: 'Registro',
+  sexo: 'Sexo',
+  categoria: 'Categoría',
   usuario: 'Usuario',
 }
 
-const READONLY_COLS = new Set([
-  'id ejemplar',
-  'sexo',
-  'ordinal',
-  'registro',
-  'usuario',
-])
+/** Celdas vacías en lugar de guión largo. */
+function textoCeldaInscripcion(v) {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v)
+  if (typeof v === 'bigint') return String(v)
+  const s = String(v).trim()
+  if (s === '' || s === '—') return ''
+  return s
+}
 
 function IconPencil() {
   return (
@@ -85,11 +95,30 @@ function IconTrash() {
 }
 
 /**
+ * @param {{ etiqueta?: string | null, federacion?: string, codigo_pais?: string | null }} f
+ */
+function etiquetaFederacion(f) {
+  return f.etiqueta != null && String(f.etiqueta).trim() !== ''
+    ? String(f.etiqueta)
+    : [f.federacion, f.codigo_pais].filter(Boolean).join(' · ')
+}
+
+/**
+ * @param {{ etiqueta?: string | null, raza?: string, codigo_raza?: string }} r
+ */
+function etiquetaRaza(r) {
+  return r.etiqueta != null && String(r.etiqueta).trim() !== ''
+    ? String(r.etiqueta)
+    : r.raza
+      ? `${r.raza} (${r.codigo_raza ?? ''})`
+      : String(r.codigo_raza ?? '—')
+}
+
+/**
  * @param {{
  *   exhibition: import('../../datos/exhibitionsTable.js').ExhibitionRow,
  *   session: { username: string, role: string, kennelId: string | null },
  *   enrollments: Record<string, string>[],
- *   onBack: () => void,
  *   onAddEnrollment: (entry: Record<string, string>) => void,
  *   onUpdateEnrollment: (index: number, entry: Record<string, string>) => void,
  *   onRemoveEnrollment: (index: number) => void,
@@ -101,7 +130,6 @@ export function VistaAnotacionExposicion({
   exhibition,
   session,
   enrollments,
-  onBack,
   onAddEnrollment,
   onUpdateEnrollment,
   onRemoveEnrollment,
@@ -112,8 +140,12 @@ export function VistaAnotacionExposicion({
   const modalNombreTitleId = useId()
   const tarjetaCategoriaErrorId = useId()
   const tarjetaEjemplarTitleId = useId()
+  const editCategoriaTitleId = useId()
+  const editCategoriaErrorId = useId()
   const [idFederacion, setIdFederacion] = useState('')
   const [idRaza, setIdRaza] = useState('')
+  const [textoBusqFederacion, setTextoBusqFederacion] = useState('')
+  const [textoBusqRaza, setTextoBusqRaza] = useState('')
   const [registroBusqueda, setRegistroBusqueda] = useState('')
   const [federaciones, setFederaciones] = useState(
     /** @type {{ id_federacion: number, etiqueta?: string | null, federacion?: string, codigo_pais?: string | null }[]} */ (
@@ -136,14 +168,24 @@ export function VistaAnotacionExposicion({
   const [categoriaTarjetaError, setCategoriaTarjetaError] = useState(
     /** @type {string | null} */ (null),
   )
-  const [editingIndex, setEditingIndex] = useState(null)
-  const [editDraft, setEditDraft] = useState(null)
+  const [editCategoriaIndex, setEditCategoriaIndex] = useState(/** @type {number | null} */ (null))
+  const [editCategoriaEjemplar, setEditCategoriaEjemplar] = useState(
+    /** @type {Record<string, unknown> | null} */ (null),
+  )
+  const [categoriaEditEtiqueta, setCategoriaEditEtiqueta] = useState('')
+  const [categoriaEdicionError, setCategoriaEdicionError] = useState(
+    /** @type {string | null} */ (null),
+  )
+  const [editCategoriaCargando, setEditCategoriaCargando] = useState(false)
 
   const [nombreModalOpen, setNombreModalOpen] = useState(false)
-  const [nmSexo, setNmSexo] = useState('')
+  const [nmSexo, setNmSexo] = useState('Macho')
   const [nmFed, setNmFed] = useState('')
   const [nmRaza, setNmRaza] = useState('')
+  const [textoNmFed, setTextoNmFed] = useState('')
+  const [textoNmRaza, setTextoNmRaza] = useState('')
   const [nmNombre, setNmNombre] = useState('')
+  const federacionDefectoAplicada = useRef(false)
   const [nmResultadosApi, setNmResultadosApi] = useState(
     /** @type {Record<string, unknown>[]} */ ([]),
   )
@@ -168,14 +210,69 @@ export function VistaAnotacionExposicion({
     [enrollments],
   )
 
+  const filaEdicionCategoria = useMemo(() => {
+    if (editCategoriaIndex == null) return null
+    return /** @type {Record<string, unknown> | null} */ (enrollments[editCategoriaIndex] ?? null)
+  }, [editCategoriaIndex, enrollments])
+
+  const categoriasElegiblesEdicion = useMemo(() => {
+    if (!editCategoriaEjemplar) return []
+    const meses = mesesCompletosHastaReferencia(
+      editCategoriaEjemplar.fecha_nacimiento,
+      exhibition['Fecha inicio'],
+    )
+    return filtrarCategoriasElegibles(categoriasApi, meses, editCategoriaEjemplar)
+  }, [editCategoriaEjemplar, categoriasApi, exhibition])
+
+  const opcionesCategoriaEdicion = useMemo(() => {
+    if (!filaEdicionCategoria) return []
+    const eleg = categoriasElegiblesEdicion
+    const labCur = String(filaEdicionCategoria.categoria ?? '').trim()
+    const idCur = filaEdicionCategoria.id_categoria
+    const tiene = eleg.some(
+      (c) => etiquetaInscripcionCategoria(/** @type {Record<string, unknown>} */ (c)) === labCur,
+    )
+    if (labCur && !tiene && idCur != null) {
+      return [
+        { id_categoria: idCur, categoria: labCur },
+        ...eleg,
+      ]
+    }
+    return eleg
+  }, [filaEdicionCategoria, categoriasElegiblesEdicion])
+
+  const nmFedEfectivo = useMemo(() => {
+    const id = nmFed.trim()
+    if (id) return id
+    const u = matchUnicoEtiqueta(federaciones, etiquetaFederacion, textoNmFed)
+    return u ? String(u.id_federacion) : ''
+  }, [nmFed, textoNmFed, federaciones])
+
+  const nmRazaEfectivo = useMemo(() => {
+    const id = nmRaza.trim()
+    if (id) return id
+    const u = matchUnicoEtiqueta(razas, etiquetaRaza, textoNmRaza)
+    return u ? String(u.id_raza) : ''
+  }, [nmRaza, textoNmRaza, razas])
+
   const nmModalCriterios = useMemo(() => {
     const base =
       (nmSexo === 'Macho' || nmSexo === 'Hembra') &&
-      nmFed.trim() !== '' &&
-      nmRaza.trim() !== ''
+      nmFedEfectivo.trim() !== '' &&
+      nmRazaEfectivo.trim() !== ''
     const nom = nmNombre.trim().length > 0
     return { base, nom }
-  }, [nmSexo, nmFed, nmRaza, nmNombre])
+  }, [nmSexo, nmFedEfectivo, nmRazaEfectivo, nmNombre])
+
+  const busquedaEsFca = useMemo(() => {
+    const id = Number(idFederacion)
+    return Number.isFinite(id) && id === ID_FEDERACION_FCA_DEFAULT
+  }, [idFederacion])
+
+  useEffect(() => {
+    if (!busquedaEsFca) return
+    setRegistroBusqueda((prev) => prev.replace(/\D/g, ''))
+  }, [busquedaEsFca])
 
   useEffect(() => {
     if (!tarjetaEjemplar) {
@@ -241,10 +338,25 @@ export function VistaAnotacionExposicion({
     }
   }, [])
 
+  useEffect(() => {
+    if (federacionDefectoAplicada.current || federaciones.length === 0) return
+    const fca =
+      federaciones.find((f) => Number(f.id_federacion) === ID_FEDERACION_FCA_DEFAULT) ??
+      federaciones.find(
+        (f) => normalizarBusqueda(String(f.codigo_pais ?? '')) === 'fca',
+      )
+    if (!fca) return
+    federacionDefectoAplicada.current = true
+    setIdFederacion(String(fca.id_federacion))
+    setTextoBusqFederacion(etiquetaFederacion(fca))
+  }, [federaciones])
+
   function resetModalNombre() {
-    setNmSexo('')
+    setNmSexo('Macho')
     setNmFed('')
     setNmRaza('')
+    setTextoNmFed('')
+    setTextoNmRaza('')
     setNmNombre('')
     setNmResultadosApi([])
     setNmBusquedaLoading(false)
@@ -253,6 +365,20 @@ export function VistaAnotacionExposicion({
 
   function openModalNombre() {
     resetModalNombre()
+    if (idFederacion.trim() !== '') {
+      setNmFed(idFederacion)
+      const f = federaciones.find((x) => String(x.id_federacion) === idFederacion)
+      setTextoNmFed(f ? etiquetaFederacion(f) : textoBusqFederacion)
+    } else {
+      setTextoNmFed(textoBusqFederacion)
+    }
+    if (idRaza.trim() !== '') {
+      setNmRaza(idRaza)
+      const r = razas.find((x) => String(x.id_raza) === idRaza)
+      setTextoNmRaza(r ? etiquetaRaza(r) : textoBusqRaza)
+    } else {
+      setTextoNmRaza(textoBusqRaza)
+    }
     setNombreModalOpen(true)
   }
 
@@ -278,8 +404,8 @@ export function VistaAnotacionExposicion({
   useEffect(() => {
     if (!nombreModalOpen) return
     const sexoOk = nmSexo === 'Macho' || nmSexo === 'Hembra'
-    const fed = nmFed.trim()
-    const raz = nmRaza.trim()
+    const fed = nmFedEfectivo.trim()
+    const raz = nmRazaEfectivo.trim()
     const nom = nmNombre.trim()
 
     if (!sexoOk || !fed || !raz || !nom) {
@@ -326,7 +452,7 @@ export function VistaAnotacionExposicion({
       cancelled = true
       clearTimeout(tid)
     }
-  }, [nombreModalOpen, nmSexo, nmFed, nmRaza, nmNombre])
+  }, [nombreModalOpen, nmSexo, nmFedEfectivo, nmRazaEfectivo, nmNombre])
 
   /**
    * @param {Record<string, unknown>} row
@@ -367,7 +493,6 @@ export function VistaAnotacionExposicion({
     }
     onAddEnrollment(
       ejemplarBusquedaApiToEnrollment(row, {
-        ordinal: enrollments.length + 1,
         categoria,
         username: session.username,
         id_categoria: idCat,
@@ -379,8 +504,24 @@ export function VistaAnotacionExposicion({
 
   async function handleBuscarEjemplaresApi(e) {
     e.preventDefault()
-    const fed = idFederacion.trim()
-    const raz = idRaza.trim()
+    let fed = idFederacion.trim()
+    let raz = idRaza.trim()
+    if (!fed) {
+      const u = matchUnicoEtiqueta(federaciones, etiquetaFederacion, textoBusqFederacion)
+      if (u) {
+        fed = String(u.id_federacion)
+        setIdFederacion(fed)
+        setTextoBusqFederacion(etiquetaFederacion(u))
+      }
+    }
+    if (!raz) {
+      const u = matchUnicoEtiqueta(razas, etiquetaRaza, textoBusqRaza)
+      if (u) {
+        raz = String(u.id_raza)
+        setIdRaza(raz)
+        setTextoBusqRaza(etiquetaRaza(u))
+      }
+    }
     const reg = registroBusqueda.trim()
     if (!fed || !raz || !reg) {
       setBusquedaError(
@@ -443,36 +584,77 @@ export function VistaAnotacionExposicion({
     setTarjetaEjemplar({ row, origin: 'busqueda' })
   }
 
-  function handleIniciarEdicion(i) {
-    setEditingIndex(i)
-    setEditDraft({ ...enrollments[i] })
+  async function abrirEdicionCategoria(i) {
+    const fila = enrollments[i]
+    if (!fila) return
+    setEditCategoriaIndex(i)
+    setCategoriaEditEtiqueta(String(fila.categoria ?? ''))
+    setCategoriaEdicionError(null)
+    setEditCategoriaEjemplar(null)
+    setEditCategoriaCargando(true)
+    const idEj = Number(fila['id ejemplar'])
+    if (!Number.isFinite(idEj)) {
+      setCategoriaEdicionError('Falta id de ejemplar en la inscripción.')
+      setEditCategoriaCargando(false)
+      return
+    }
+    try {
+      const data = await obtenerEjemplarPorId(idEj)
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        setEditCategoriaEjemplar(/** @type {Record<string, unknown>} */ (data))
+      } else {
+        setCategoriaEdicionError('Respuesta de ejemplar no válida.')
+      }
+    } catch (e) {
+      setCategoriaEdicionError(
+        e instanceof ApiError ? e.message : 'No se pudo cargar el ejemplar.',
+      )
+    } finally {
+      setEditCategoriaCargando(false)
+    }
   }
 
-  function handleGuardarEdicion() {
-    if (editingIndex == null || !editDraft) return
-    const idCat = idCategoriaFromEtiqueta(
-      categoriasApi,
-      String(editDraft.categoria ?? '').trim(),
-    )
-    onUpdateEnrollment(editingIndex, {
-      ...editDraft,
-      id_categoria: idCat ?? editDraft.id_categoria,
+  function cerrarEdicionCategoria() {
+    setEditCategoriaIndex(null)
+    setEditCategoriaEjemplar(null)
+    setCategoriaEdicionError(null)
+    setCategoriaEditEtiqueta('')
+  }
+
+  function guardarEdicionCategoria() {
+    if (editCategoriaIndex == null || !filaEdicionCategoria) return
+    const t = categoriaEditEtiqueta.trim()
+    if (!t) {
+      setCategoriaEdicionError('Elegí una categoría.')
+      return
+    }
+    let idCat = idCategoriaFromEtiqueta(categoriasApi, t)
+    if (idCat == null) {
+      const same =
+        t === String(filaEdicionCategoria.categoria ?? '').trim() &&
+        filaEdicionCategoria.id_categoria != null
+      if (same) {
+        const n = Number(filaEdicionCategoria.id_categoria)
+        if (Number.isFinite(n)) idCat = n
+      }
+    }
+    if (idCat == null || !Number.isFinite(idCat)) {
+      setCategoriaEdicionError('Categoría no válida para este ejemplar.')
+      return
+    }
+    onUpdateEnrollment(editCategoriaIndex, {
+      ...filaEdicionCategoria,
+      categoria: t,
+      id_categoria: idCat,
     })
-    setEditingIndex(null)
-    setEditDraft(null)
-  }
-
-  function handleCancelarEdicion() {
-    setEditingIndex(null)
-    setEditDraft(null)
+    cerrarEdicionCategoria()
   }
 
   function handleEliminar(i) {
     const ok = window.confirm('¿Quitar este ejemplar de la anotación?')
     if (!ok) return
+    cerrarEdicionCategoria()
     onRemoveEnrollment(i)
-    setEditingIndex(null)
-    setEditDraft(null)
   }
 
   function renderTarjetaEjemplarOverlay() {
@@ -487,11 +669,7 @@ export function VistaAnotacionExposicion({
       !sinEdad && categoriasElegiblesTarjeta.length === 0
 
     return (
-      <div
-        className="anotacion-tarjeta-overlay"
-        role="presentation"
-        onClick={() => setTarjetaEjemplar(null)}
-      >
+      <div className="anotacion-tarjeta-overlay" role="presentation">
         <div
           className="anotacion-tarjeta-dialog"
           role="dialog"
@@ -599,13 +777,6 @@ export function VistaAnotacionExposicion({
           <footer className="anotacion-tarjeta-dialog__footer">
             <button
               type="button"
-              className="enrollment-modal__btn enrollment-modal__btn--secondary"
-              onClick={() => setTarjetaEjemplar(null)}
-            >
-              Volver
-            </button>
-            <button
-              type="button"
               className="enrollment-modal__btn enrollment-modal__btn--primary"
               disabled={sinEdad || categoriasElegiblesTarjeta.length === 0}
               onClick={confirmarTarjetaInscripcion}
@@ -620,28 +791,153 @@ export function VistaAnotacionExposicion({
 
   const colCount = ENROLLMENT_TABLE_COLUMNS.length + 1
 
+  function renderEdicionCategoriaModal() {
+    if (editCategoriaIndex == null) return null
+    const fila = filaEdicionCategoria
+    const meses =
+      editCategoriaEjemplar != null
+        ? mesesCompletosHastaReferencia(
+            editCategoriaEjemplar.fecha_nacimiento,
+            exhibition['Fecha inicio'],
+          )
+        : null
+    const sinEdad =
+      !editCategoriaCargando &&
+      editCategoriaEjemplar != null &&
+      meses === null
+    const sinCategorias =
+      !editCategoriaCargando &&
+      editCategoriaEjemplar != null &&
+      meses != null &&
+      opcionesCategoriaEdicion.length === 0
+
+    return (
+      <div className="anotacion-edit-cat-overlay" role="presentation">
+        <div
+          className="anotacion-edit-cat-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={editCategoriaTitleId}
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <h2 id={editCategoriaTitleId} className="anotacion-edit-cat-dialog__title">
+            Cambiar categoría
+          </h2>
+          {fila ? (
+            <p className="anotacion-edit-cat-dialog__meta">
+              {textoCeldaInscripcion(fila.nombre) || '—'}
+            </p>
+          ) : null}
+          {editCategoriaCargando ? (
+            <p className="enrollment-modal__hint">Cargando datos del ejemplar…</p>
+          ) : !editCategoriaEjemplar ? (
+            <p className="enrollment-modal__hint enrollment-modal__hint--error" role="alert">
+              {categoriaEdicionError ?? 'No se pudo cargar el ejemplar.'}
+            </p>
+          ) : (
+            <>
+              <label className="enrollment-modal__field">
+                <span className="enrollment-modal__field-label">Categoría</span>
+                <select
+                  className="enrollment-modal__input enrollment-modal__select enrollment-modal__input--compact"
+                  value={categoriaEditEtiqueta}
+                  onChange={(e) => {
+                    setCategoriaEditEtiqueta(e.target.value)
+                    setCategoriaEdicionError(null)
+                  }}
+                  disabled={sinEdad || sinCategorias}
+                  aria-invalid={categoriaEdicionError ? true : undefined}
+                  aria-describedby={categoriaEdicionError ? editCategoriaErrorId : undefined}
+                  aria-label="Categoría de inscripción"
+                >
+                  <option value="">
+                    {sinEdad
+                      ? 'Requiere fecha de nacimiento'
+                      : sinCategorias
+                        ? 'Sin categorías para esta edad y sexo'
+                        : 'Seleccionar categoría'}
+                  </option>
+                  {opcionesCategoriaEdicion.map((raw) => {
+                    const c = /** @type {Record<string, unknown>} */ (raw)
+                    const lab = etiquetaInscripcionCategoria(c)
+                    const k = c.id_categoria ?? lab
+                    return (
+                      <option key={String(k)} value={lab}>
+                        {lab}
+                      </option>
+                    )
+                  })}
+                </select>
+              </label>
+              {sinEdad ? (
+                <p className="anotacion-tarjeta-card__hint-warning">
+                  Sin fecha de nacimiento no se puede determinar la categoría.
+                </p>
+              ) : sinCategorias ? (
+                <p className="anotacion-tarjeta-card__hint-warning">
+                  Ninguna categoría coincide con el sexo y la edad de este ejemplar.
+                </p>
+              ) : null}
+              {categoriaEdicionError ? (
+                <p
+                  id={editCategoriaErrorId}
+                  className="enrollment-modal__field-error"
+                  role="alert"
+                >
+                  {categoriaEdicionError}
+                </p>
+              ) : null}
+            </>
+          )}
+          <div className="anotacion-edit-cat-dialog__footer">
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--secondary"
+              onClick={cerrarEdicionCategoria}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--primary"
+              disabled={
+                editCategoriaCargando ||
+                !editCategoriaEjemplar ||
+                sinEdad ||
+                sinCategorias
+              }
+              onClick={guardarEdicionCategoria}
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="anotacion-page" role="region" aria-labelledby={titleId}>
-      <header className="enrollment-modal__header">
-        <div>
-          <h2 id={titleId} className="enrollment-modal__title">
-            Anotación en exposición
-          </h2>
-          <p className="enrollment-modal__subtitle">
+      <header className="enrollment-modal__header enrollment-modal__header--anotacion-linea">
+        <h2 id={titleId} className="enrollment-modal__title enrollment-modal__title--anotacion-linea">
+          <span className="enrollment-modal__title-anotacion-label">Anotación en exposición</span>
+          <span className="enrollment-modal__title-anotacion-sep" aria-hidden>
+            {' '}
+            ·{' '}
+          </span>
+          <span className="enrollment-modal__title-anotacion-meta">
             N.º {exhibition['Número'] ?? '—'} · {exhibition['Descripción'] ?? '—'}
-          </p>
-          {fechaRango ? (
-            <p className="enrollment-modal__subtitle-dates">{fechaRango}</p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="enrollment-modal__close"
-          aria-label="Volver al listado"
-          onClick={onBack}
-        >
-          ×
-        </button>
+            {fechaRango ? (
+              <>
+                <span className="enrollment-modal__title-anotacion-sep" aria-hidden>
+                  {' '}
+                  ·{' '}
+                </span>
+                {fechaRango}
+              </>
+            ) : null}
+          </span>
+        </h2>
       </header>
 
       <section className="enrollment-modal__section">
@@ -663,85 +959,81 @@ export function VistaAnotacionExposicion({
             <div className="enrollment-modal__filters-fields enrollment-modal__filters-fields--compact">
               <label className="enrollment-modal__field">
                 <span className="enrollment-modal__field-label">Federación</span>
-                <select
-                  className="enrollment-modal__input enrollment-modal__select enrollment-modal__input--compact"
-                  value={idFederacion}
-                  onChange={(e) => setIdFederacion(e.target.value)}
-                  required
-                  aria-required
-                  aria-label="Federación (obligatorio)"
-                >
-                  <option value="">Seleccionar federación</option>
-                  {federaciones.map((f) => {
-                    const lab =
-                      f.etiqueta != null && String(f.etiqueta).trim() !== ''
-                        ? String(f.etiqueta)
-                        : [f.federacion, f.codigo_pais].filter(Boolean).join(' · ')
-                    return (
-                      <option key={f.id_federacion} value={String(f.id_federacion)}>
-                        {lab}
-                      </option>
-                    )
-                  })}
-                </select>
+                <BusquedaSelectTipo
+                  items={federaciones}
+                  getId={(f) => /** @type {{ id_federacion: number }} */ (f).id_federacion}
+                  getLabel={(f) => etiquetaFederacion(f)}
+                  valueId={idFederacion}
+                  inputText={textoBusqFederacion}
+                  onValueIdChange={setIdFederacion}
+                  onInputTextChange={setTextoBusqFederacion}
+                  aria-label="Federación (obligatorio); Tab completa si hay una sola coincidencia"
+                  placeholder=""
+                  className="enrollment-modal__input enrollment-modal__input--compact"
+                  scopeSelector=".enrollment-modal__filters-fields--compact"
+                  disabled={catalogoCargando}
+                />
               </label>
               <label className="enrollment-modal__field">
                 <span className="enrollment-modal__field-label">Raza</span>
-                <select
-                  className="enrollment-modal__input enrollment-modal__select enrollment-modal__input--compact"
-                  value={idRaza}
-                  onChange={(e) => setIdRaza(e.target.value)}
-                  required
-                  aria-required
-                  aria-label="Raza (obligatorio)"
-                >
-                  <option value="">Seleccionar raza</option>
-                  {razas.map((r) => {
-                    const lab =
-                      r.etiqueta != null && String(r.etiqueta).trim() !== ''
-                        ? String(r.etiqueta)
-                        : r.raza
-                          ? `${r.raza} (${r.codigo_raza ?? ''})`
-                          : String(r.codigo_raza ?? '—')
-                    return (
-                      <option key={r.id_raza} value={String(r.id_raza)}>
-                        {lab}
-                      </option>
-                    )
-                  })}
-                </select>
-              </label>
-              <label className="enrollment-modal__field">
-                <span className="enrollment-modal__field-label">Registro</span>
-                <input
+                <BusquedaSelectTipo
+                  items={razas}
+                  getId={(r) => /** @type {{ id_raza: number }} */ (r).id_raza}
+                  getLabel={(r) => etiquetaRaza(r)}
+                  valueId={idRaza}
+                  inputText={textoBusqRaza}
+                  onValueIdChange={setIdRaza}
+                  onInputTextChange={setTextoBusqRaza}
+                  aria-label="Raza (obligatorio); Tab completa si hay una sola coincidencia"
+                  placeholder=""
                   className="enrollment-modal__input enrollment-modal__input--compact"
-                  value={registroBusqueda}
-                  onChange={(e) => setRegistroBusqueda(e.target.value)}
-                  placeholder="N.º de registro"
-                  autoComplete="off"
-                  inputMode="numeric"
-                  required
-                  aria-required
-                  aria-label="Número de registro (obligatorio)"
+                  scopeSelector=".enrollment-modal__filters-fields--compact"
+                  disabled={catalogoCargando}
                 />
               </label>
-            </div>
-            <div className="enrollment-modal__filters-toolbar-actions">
-              <button
-                type="submit"
-                className="enrollment-modal__btn enrollment-modal__btn--primary"
-                disabled={busquedaLoading}
-                aria-busy={busquedaLoading}
-              >
-                {busquedaLoading ? 'Buscando…' : 'Buscar'}
-              </button>
-              <button
-                type="button"
-                className="enrollment-modal__btn enrollment-modal__btn--secondary"
-                onClick={openModalNombre}
-              >
-                Anotar por nombre
-              </button>
+              <div className="enrollment-modal__registro-y-acciones">
+                <label className="enrollment-modal__field enrollment-modal__field--registro-inline">
+                  <span className="enrollment-modal__field-label">Registro</span>
+                  <input
+                    className="enrollment-modal__input enrollment-modal__input--compact"
+                    value={registroBusqueda}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setRegistroBusqueda(busquedaEsFca ? v.replace(/\D/g, '') : v)
+                    }}
+                    placeholder={
+                      busquedaEsFca ? 'Solo números (FCA)' : 'N.º de registro'
+                    }
+                    autoComplete="off"
+                    inputMode={busquedaEsFca ? 'numeric' : 'text'}
+                    pattern={busquedaEsFca ? '[0-9]*' : undefined}
+                    required
+                    aria-required
+                    aria-label={
+                      busquedaEsFca
+                        ? 'Número de registro FCA, solo dígitos (obligatorio)'
+                        : 'Número de registro (obligatorio)'
+                    }
+                  />
+                </label>
+                <div className="enrollment-modal__filters-toolbar-actions">
+                  <button
+                    type="submit"
+                    className="enrollment-modal__btn enrollment-modal__btn--primary"
+                    disabled={busquedaLoading}
+                    aria-busy={busquedaLoading}
+                  >
+                    {busquedaLoading ? 'Buscando…' : 'Buscar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="enrollment-modal__btn enrollment-modal__btn--secondary"
+                    onClick={openModalNombre}
+                  >
+                    Anotar por nombre
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </form>
@@ -751,6 +1043,8 @@ export function VistaAnotacionExposicion({
             <p className="enrollment-modal__hint">
               Completá <strong>federación</strong>, <strong>raza</strong> y{' '}
               <strong>número de registro</strong> (los tres son obligatorios) y pulsá «Buscar».
+              En federación y raza podés escribir para buscar; con <strong>Tab</strong> se completa la
+              opción si solo hay una coincidencia con lo escrito.
               Si hay coincidencias, verás la tarjeta del ejemplar y podrás anotar con la categoría
               que corresponda.
             </p>
@@ -797,11 +1091,7 @@ export function VistaAnotacionExposicion({
       </section>
 
       {nombreModalOpen ? (
-        <div
-          className="anotacion-nombre-overlay"
-          role="presentation"
-          onClick={closeModalNombre}
-        >
+        <div className="anotacion-nombre-overlay" role="presentation">
           <div
             className="anotacion-nombre-dialog"
             role="dialog"
@@ -823,84 +1113,71 @@ export function VistaAnotacionExposicion({
               </button>
             </header>
 
-            <div
-              className="anotacion-nombre-split"
-              role="group"
-              aria-label="Sexo del ejemplar"
-            >
-              <button
-                type="button"
-                className={`anotacion-nombre-split__half${nmSexo === 'Macho' ? ' is-selected' : ''}`}
-                onClick={() => setNmSexo('Macho')}
+            <div className="anotacion-nombre-dialog__main">
+              <div
+                className="anotacion-nombre-split"
+                role="group"
+                aria-label="Sexo del ejemplar"
               >
-                <span className="anotacion-nombre-split__label">Macho</span>
-              </button>
-              <button
-                type="button"
-                className={`anotacion-nombre-split__half${nmSexo === 'Hembra' ? ' is-selected' : ''}`}
-                onClick={() => setNmSexo('Hembra')}
-              >
-                <span className="anotacion-nombre-split__label">Hembra</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className={`anotacion-nombre-split__half${nmSexo === 'Macho' ? ' is-selected' : ''}`}
+                  onClick={() => setNmSexo('Macho')}
+                >
+                  <span className="anotacion-nombre-split__label">Macho</span>
+                </button>
+                <button
+                  type="button"
+                  className={`anotacion-nombre-split__half${nmSexo === 'Hembra' ? ' is-selected' : ''}`}
+                  onClick={() => setNmSexo('Hembra')}
+                >
+                  <span className="anotacion-nombre-split__label">Hembra</span>
+                </button>
+              </div>
 
-            <div className="anotacion-nombre-form">
-              <p className="anotacion-nombre-form__live-hint">
-                Elegí sexo, federación y raza; luego escribí parte del nombre: la tabla se actualiza
-                sola mientras escribís. Tocá una fila para abrir la tarjeta e inscribir.
-              </p>
-              <div className="anotacion-nombre-form__row">
-                <label className="enrollment-modal__field">
-                  <span className="enrollment-modal__field-label">Federación</span>
-                  <select
-                    className="enrollment-modal__input enrollment-modal__select"
-                    value={nmFed}
-                    onChange={(e) => setNmFed(e.target.value)}
-                    required
-                    aria-required
-                    aria-label="Federación (obligatorio)"
-                  >
-                    <option value="">Seleccionar federación</option>
-                    {federaciones.map((f) => {
-                      const lab =
-                        f.etiqueta != null && String(f.etiqueta).trim() !== ''
-                          ? String(f.etiqueta)
-                          : [f.federacion, f.codigo_pais].filter(Boolean).join(' · ')
-                      return (
-                        <option key={f.id_federacion} value={String(f.id_federacion)}>
-                          {lab}
-                        </option>
-                      )
-                    })}
-                  </select>
+              <div className="anotacion-nombre-form">
+                <p className="anotacion-nombre-form__live-hint">
+                  Elegí sexo; en federación y raza escribí para buscar y usá <strong>Tab</strong> para
+                  completar cuando haya una sola coincidencia. Luego escribí parte del nombre: la tabla
+                  se actualiza sola. Tocá una fila para abrir la tarjeta e inscribir. Si ya elegiste
+                  federación y raza en la búsqueda por registro, se rellenan acá.
+                </p>
+                <div className="anotacion-nombre-form__row anotacion-nombre-form__row--tercios">
+                  <label className="enrollment-modal__field">
+                    <span className="enrollment-modal__field-label">Federación</span>
+                    <BusquedaSelectTipo
+                      items={federaciones}
+                      getId={(f) => /** @type {{ id_federacion: number }} */ (f).id_federacion}
+                      getLabel={(f) => etiquetaFederacion(f)}
+                      valueId={nmFed}
+                      inputText={textoNmFed}
+                      onValueIdChange={setNmFed}
+                      onInputTextChange={setTextoNmFed}
+                      aria-label="Federación (obligatorio); Tab completa si hay una sola coincidencia"
+                      placeholder=""
+                      className="enrollment-modal__input enrollment-modal__select"
+                      scopeSelector=".anotacion-nombre-form__row--tercios"
+                      disabled={catalogoCargando}
+                    />
                 </label>
                 <label className="enrollment-modal__field">
                   <span className="enrollment-modal__field-label">Raza</span>
-                  <select
+                  <BusquedaSelectTipo
+                    items={razas}
+                    getId={(r) => /** @type {{ id_raza: number }} */ (r).id_raza}
+                    getLabel={(r) => etiquetaRaza(r)}
+                    valueId={nmRaza}
+                    inputText={textoNmRaza}
+                    onValueIdChange={setNmRaza}
+                    onInputTextChange={setTextoNmRaza}
+                    aria-label="Raza (obligatorio); Tab completa si hay una sola coincidencia"
+                    placeholder=""
                     className="enrollment-modal__input enrollment-modal__select"
-                    value={nmRaza}
-                    onChange={(e) => setNmRaza(e.target.value)}
-                    required
-                    aria-required
-                    aria-label="Raza (obligatorio)"
-                  >
-                    <option value="">Seleccionar raza</option>
-                    {razas.map((r) => {
-                      const lab =
-                        r.etiqueta != null && String(r.etiqueta).trim() !== ''
-                          ? String(r.etiqueta)
-                          : r.raza
-                            ? `${r.raza} (${r.codigo_raza ?? ''})`
-                            : String(r.codigo_raza ?? '—')
-                      return (
-                        <option key={r.id_raza} value={String(r.id_raza)}>
-                          {lab}
-                        </option>
-                      )
-                    })}
-                  </select>
+                    scopeSelector=".anotacion-nombre-form__row--tercios"
+                    disabled={catalogoCargando}
+                  />
                 </label>
-                <label className="enrollment-modal__field anotacion-nombre-form__nombre">
+                <label className="enrollment-modal__field">
                   <span className="enrollment-modal__field-label">Nombre</span>
                   <input
                     className="enrollment-modal__input"
@@ -1001,9 +1278,11 @@ export function VistaAnotacionExposicion({
             </div>
           </div>
         </div>
+        </div>
       ) : null}
 
       {renderTarjetaEjemplarOverlay()}
+      {renderEdicionCategoriaModal()}
 
       <section className="enrollment-modal__section enrollment-modal__section--table">
         <h3 className="enrollment-modal__section-title">Ejemplares anotados</h3>
@@ -1049,75 +1328,37 @@ export function VistaAnotacionExposicion({
                 </tr>
               ) : (
                 enrollments.map((row, i) => {
-                  const editando = editingIndex === i && editDraft != null
-                  const fuente = editando ? editDraft : row
                   const rk = row.id_catalogo ?? row['id ejemplar']
                   return (
                     <tr key={`${rk}-${i}`}>
                       {ENROLLMENT_TABLE_COLUMNS.map((col) => (
                         <td key={col}>
-                          {editando ? (
-                            READONLY_COLS.has(col) ? (
-                              <span className="enrollment-modal__cell-readonly">
-                                {fuente[col] ?? '—'}
-                              </span>
-                            ) : (
-                              <input
-                                className="enrollment-modal__input enrollment-modal__input--inline"
-                                value={fuente[col] ?? ''}
-                                onChange={(e) =>
-                                  setEditDraft((d) =>
-                                    d ? { ...d, [col]: e.target.value } : d,
-                                  )
-                                }
-                                aria-label={COLUMN_LABELS[col] ?? col}
-                              />
-                            )
-                          ) : (
-                            row[col] ?? '—'
-                          )}
+                          {col === 'numero'
+                            ? ''
+                            : textoCeldaInscripcion(row[col])}
                         </td>
                       ))}
                       <td className="enrollment-modal__td-actions">
-                        {editando ? (
-                          <div className="enrollment-modal__row-actions">
-                            <button
-                              type="button"
-                              className="enrollment-modal__btn enrollment-modal__btn--primary enrollment-modal__btn--compact"
-                              onClick={handleGuardarEdicion}
-                            >
-                              Guardar
-                            </button>
-                            <button
-                              type="button"
-                              className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact"
-                              onClick={handleCancelarEdicion}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="enrollment-modal__row-actions">
-                            <button
-                              type="button"
-                              className="enrollment-modal__icon-btn enrollment-modal__icon-btn--edit"
-                              title="Editar"
-                              aria-label="Editar fila"
-                              onClick={() => handleIniciarEdicion(i)}
-                            >
-                              <IconPencil />
-                            </button>
-                            <button
-                              type="button"
-                              className="enrollment-modal__icon-btn enrollment-modal__icon-btn--delete"
-                              title="Eliminar"
-                              aria-label="Eliminar de la anotación"
-                              onClick={() => handleEliminar(i)}
-                            >
-                              <IconTrash />
-                            </button>
-                          </div>
-                        )}
+                        <div className="enrollment-modal__row-actions">
+                          <button
+                            type="button"
+                            className="enrollment-modal__icon-btn enrollment-modal__icon-btn--edit"
+                            title="Cambiar categoría"
+                            aria-label="Cambiar categoría"
+                            onClick={() => void abrirEdicionCategoria(i)}
+                          >
+                            <IconPencil />
+                          </button>
+                          <button
+                            type="button"
+                            className="enrollment-modal__icon-btn enrollment-modal__icon-btn--delete"
+                            title="Eliminar"
+                            aria-label="Eliminar de la anotación"
+                            onClick={() => handleEliminar(i)}
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )

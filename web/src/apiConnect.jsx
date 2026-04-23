@@ -144,6 +144,28 @@ export function eliminarExposicion(id) {
   return request('DELETE', `/api/exposiciones/${encodeURIComponent(String(id))}`)
 }
 
+// ─── EXPOSICIONES × CLUBES (co-organizadores, `exposiciones_catalogos`) ───────
+
+/** @returns {Promise<{ id_club: number, id_exposicion: number, club: string | null }[]>} */
+export function listarExposicionesCatalogosPorExposicion(idExposicion) {
+  return request(
+    'GET',
+    `/api/exposiciones-catalogos/exposicion/${encodeURIComponent(String(idExposicion))}`,
+  )
+}
+
+/** @param {{ id_exposicion: number, id_club: number }} payload */
+export function crearExposicionCatalogo(payload) {
+  return request('POST', '/api/exposiciones-catalogos', { body: payload })
+}
+
+export function eliminarExposicionCatalogo(idExposicion, idClub) {
+  return request(
+    'DELETE',
+    `/api/exposiciones-catalogos/exposicion/${encodeURIComponent(String(idExposicion))}/club/${encodeURIComponent(String(idClub))}`,
+  )
+}
+
 // ─── CATÁLOGOS (inscripciones ejemplar ↔ exposición) ─────────────────────────
 
 /**

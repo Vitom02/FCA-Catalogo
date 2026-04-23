@@ -12,14 +12,15 @@
 
 .anotacion-page .enrollment-modal__header {
   flex-shrink: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  display: block;
   padding: 0 0 14px;
   margin: 0;
   border-bottom: 1px solid var(--input-border);
   background: transparent;
+}
+
+.anotacion-page .enrollment-modal__header--anotacion-linea {
+  min-width: 0;
 }
 
 .enrollment-modal__title {
@@ -30,36 +31,34 @@
   color: var(--card-text);
 }
 
-.enrollment-modal__subtitle {
-  margin: 6px 0 0;
-  font-size: 0.875rem;
-  color: var(--card-text-muted);
+/* Una sola línea: título + N.º + nombre + fechas; si no entra, continúa abajo. */
+.enrollment-modal__title--anotacion-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15em 0.35em;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  min-width: 0;
 }
 
-.enrollment-modal__subtitle-dates {
-  margin: 6px 0 0;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--card-text);
-  letter-spacing: 0.01em;
-}
-
-.anotacion-page .enrollment-modal__close {
+.enrollment-modal__title-anotacion-label {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  background: #fff;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: var(--card-text-muted);
+  font-weight: 700;
+  color: var(--card-text);
 }
 
-.anotacion-page .enrollment-modal__close:hover {
-  background: #f1f5f9;
-  color: var(--card-text);
+.enrollment-modal__title-anotacion-sep {
+  color: var(--card-text-muted);
+  font-weight: 500;
+}
+
+.enrollment-modal__title-anotacion-meta {
+  min-width: 0;
+  font-weight: 500;
+  color: var(--card-text-muted);
 }
 
 .anotacion-page .enrollment-modal__section {
@@ -133,6 +132,31 @@
   flex-shrink: 0;
 }
 
+/* Registro + botones: mismo bloque que en desktop, con separación respecto al input. */
+.enrollment-modal__registro-y-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.enrollment-modal__field--registro-inline {
+  flex: 1 1 6.5rem;
+  min-width: 5.5rem;
+  max-width: 11.5rem;
+  margin: 0;
+}
+
+/* Sobre .filters-fields--compact .enrollment-modal__field (más bajo en cascada) */
+.enrollment-modal__filters-fields--compact
+  .enrollment-modal__field--registro-inline {
+  flex: 1 1 6.5rem;
+  min-width: 5.5rem;
+  max-width: 11.5rem;
+}
+
 .enrollment-modal__post-busqueda {
   display: flex;
   flex-direction: column;
@@ -167,6 +191,11 @@
 
   .enrollment-modal__filters-toolbar-actions {
     justify-content: flex-end;
+  }
+
+  .enrollment-modal__registro-y-acciones {
+    width: 100%;
+    flex: 1 1 auto;
   }
 }
 
@@ -408,6 +437,60 @@
     min-height: 240px;
     max-height: 55svh;
   }
+
+  .anotacion-nombre-dialog {
+    height: min(92vh, 960px);
+    max-height: min(92vh, 960px);
+  }
+}
+
+/* Popup: editar solo categoría (GET /api/ejemplares/:id desde la web) */
+.anotacion-edit-cat-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.anotacion-edit-cat-dialog {
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px 22px;
+  border-radius: 12px;
+  border: 1px solid var(--home-frame-border);
+  background: var(--card-bg);
+  box-shadow: 0 18px 48px rgba(15, 39, 68, 0.18);
+}
+
+.anotacion-edit-cat-dialog__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--card-text);
+  letter-spacing: -0.02em;
+}
+
+.anotacion-edit-cat-dialog__meta {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--card-text-muted);
+  line-height: 1.35;
+}
+
+.anotacion-edit-cat-dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 /* Modal: anotar por nombre */
@@ -424,8 +507,9 @@
 }
 
 .anotacion-nombre-dialog {
-  width: min(1024px, 100%);
-  max-height: min(96vh, 1200px);
+  width: min(1200px, calc(100vw - 32px));
+  height: min(90vh, 960px);
+  max-height: min(90vh, 960px);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -434,6 +518,17 @@
   border: 1px solid var(--home-frame-border);
   background: var(--card-bg);
   box-shadow: 0 18px 48px rgba(15, 39, 68, 0.18);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Contenido bajo el título: altura fija; la tabla no estira el popup */
+.anotacion-nombre-dialog__main {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -514,6 +609,10 @@
   pointer-events: none;
 }
 
+.anotacion-nombre-form {
+  flex-shrink: 0;
+}
+
 .anotacion-nombre-form__row {
   display: grid;
   grid-template-columns: 1fr 1fr 1.2fr;
@@ -521,8 +620,25 @@
   align-items: end;
 }
 
+/* Tres columnas iguales (~33% cada una en el ancho del modal) */
+.anotacion-nombre-form__row--tercios {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.anotacion-nombre-form__row--tercios .enrollment-modal__field {
+  min-width: 0;
+}
+
+.anotacion-nombre-form__row--tercios .enrollment-modal__input,
+.anotacion-nombre-form__row--tercios .enrollment-modal__select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 640px) {
-  .anotacion-nombre-form__row {
+  .anotacion-nombre-form__row,
+  .anotacion-nombre-form__row--tercios {
     grid-template-columns: 1fr;
   }
 }
@@ -535,9 +651,8 @@
 }
 
 .anotacion-nombre-table-wrap {
-  flex: 1;
-  min-height: 200px;
-  max-height: min(52vh, 560px);
+  flex: 1 1 0;
+  min-height: 12rem;
   overflow: auto;
   border-radius: 8px;
   border: 1px solid var(--table-grid);
@@ -561,6 +676,20 @@
 
 .anotacion-nombre-table__row {
   cursor: pointer;
+}
+
+.anotacion-nombre-table
+  tbody
+  tr.anotacion-nombre-table__row:hover:not(.is-disabled)
+  td {
+  background: #c5ced9;
+}
+
+.anotacion-nombre-table
+  tbody
+  tr.anotacion-nombre-table__row:focus-visible:not(.is-disabled)
+  td {
+  background: #b0bac8;
 }
 
 .anotacion-nombre-table__row:focus-visible {

@@ -215,13 +215,12 @@ export function filterSpecimenPool(pool, q) {
 
 /** Columnas de la tabla de anotados (federación y raza almacenan códigos). */
 export const ENROLLMENT_TABLE_COLUMNS = [
-  'id ejemplar',
   'nombre',
-  'sexo',
-  'federacion',
-  'categoria',
   'raza',
-  'ordinal',
+  'federacion',
   'registro',
+  'sexo',
+  'categoria',
+  'numero',
   'usuario',
 ]

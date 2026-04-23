@@ -2,20 +2,6 @@ import { etiquetaInscripcionCategoria } from './categoriaExposicion.js'
 import { normalizeSexoEjemplarApi } from './mapEjemplarApi.js'
 
 /**
- * Siguiente `numero` de catálogo para la exposición (ordinal en pantalla).
- * Usa el máximo `ordinal` ya cargado + 1; si no hay filas, 1.
- * @param {Record<string, unknown>[]} enrollments
- */
-export function siguienteNumeroCatalogoExposicion(enrollments) {
-  let max = 0
-  for (const e of enrollments) {
-    const o = Number(e.ordinal)
-    if (Number.isFinite(o) && o > max) max = o
-  }
-  return max + 1
-}
-
-/**
  * @param {Record<string, unknown>[]} categoriasApi
  * @param {string} etiqueta
  * @returns {number | null}
@@ -35,28 +21,43 @@ export function idCategoriaFromEtiqueta(categoriasApi, etiqueta) {
 /**
  * Fila de `GET /api/catalogos/exposicion/:id/detalle` → fila de tabla de anotados.
  * @param {Record<string, unknown>} row
- * @param {number} index
  */
-export function mapCatalogoDetalleToEnrollment(row, index) {
+export function mapCatalogoDetalleToEnrollment(row) {
   const num = row.numero
   const ord =
     num != null && num !== '' && Number.isFinite(Number(num))
       ? String(num)
-      : String(index + 1)
+      : ''
+  const sexo = normalizeSexoEjemplarApi(row.sexo)
   return {
     id_catalogo: row.id_catalogo,
     id_categoria: row.id_categoria,
     'id ejemplar': String(row.id_ejemplar ?? ''),
-    nombre: String(row.nombre_completo ?? '—'),
-    sexo: normalizeSexoEjemplarApi(row.sexo),
-    federacion: String(row.codigo_pais ?? '—'),
-    categoria: String(row.categoria_etiqueta ?? '—'),
-    raza: String(row.raza ?? '—'),
+    nombre:
+      row.nombre_completo != null && String(row.nombre_completo).trim() !== ''
+        ? String(row.nombre_completo)
+        : '',
+    sexo: sexo === '—' ? '' : sexo,
+    federacion:
+      row.codigo_pais != null && String(row.codigo_pais).trim() !== ''
+        ? String(row.codigo_pais)
+        : '',
+    categoria:
+      row.categoria_etiqueta != null && String(row.categoria_etiqueta).trim() !== ''
+        ? String(row.categoria_etiqueta)
+        : '',
+    raza:
+      row.raza != null && String(row.raza).trim() !== '' ? String(row.raza) : '',
+    /** Copia de `c.numero` (API) para alinear con claves y fallback en tablas. */
+    numero: row.numero,
     ordinal: ord,
     registro:
       row.registro != null && row.registro !== ''
         ? String(row.registro)
-        : '—',
-    usuario: String(row.usuario_login ?? '—'),
+        : '',
+    usuario:
+      row.usuario_login != null && String(row.usuario_login).trim() !== ''
+        ? String(row.usuario_login)
+        : '',
   }
 }

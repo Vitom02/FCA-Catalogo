@@ -1,7 +1,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  ApiError,
+  actualizarExposicion,
+  crearExposicion,
+  crearExposicionCatalogo,
+  eliminarExposicion,
+  eliminarExposicionCatalogo,
   listarCatalogosConteosPorExposicion,
+  listarExposicionesCatalogosPorExposicion,
   listarExposicionesProximas,
 } from '../../apiConnect.jsx'
 import {
@@ -25,6 +32,32 @@ import {
   mapListaExposicionesApi,
 } from '../../utilidades/mapExposicionesApi.js'
 import './PaginaInicio.css'
+
+/**
+ * Alinea `exposiciones_catalogos` con la lista de ids enviada desde el modal.
+ * @param {number} idExposicion
+ * @param {number[]} idsNuevos
+ */
+async function sincronizarClubesExposicionCatalogo(idExposicion, idsNuevos) {
+  const prev = await listarExposicionesCatalogosPorExposicion(idExposicion)
+  const prevIds = Array.isArray(prev)
+    ? prev
+        .map((p) => Number(/** @type {{ id_club?: unknown }} */ (p).id_club))
+        .filter((n) => Number.isFinite(n))
+    : []
+  const prevSet = new Set(prevIds)
+  const nextSet = new Set(idsNuevos)
+  for (const cid of idsNuevos) {
+    if (!prevSet.has(cid)) {
+      await crearExposicionCatalogo({ id_exposicion: idExposicion, id_club: cid })
+    }
+  }
+  for (const pid of prevIds) {
+    if (!nextSet.has(pid)) {
+      await eliminarExposicionCatalogo(idExposicion, pid)
+    }
+  }
+}
 
 const MONTH_OPTIONS = [
   { value: '', label: 'Mes' },
@@ -288,13 +321,32 @@ export function PaginaInicio({
     setModalExpoAbierto(true)
   }, [])
 
-  const handleDelete = useCallback((row) => {
-    const ok = window.confirm(
-      `¿Eliminar la exposición «${row['Descripción'] ?? '—'}» (${row['Número'] ?? '—'})?`,
-    )
-    if (!ok) return
-    setExhibitionRows((prev) => prev.filter((r) => !isSameExhibitionRow(r, row)))
-  }, [setExhibitionRows])
+  const handleDelete = useCallback(
+    async (row) => {
+      const ok = window.confirm(
+        `¿Eliminar la exposición «${row['Descripción'] ?? '—'}» (${row['Número'] ?? '—'})?`,
+      )
+      if (!ok) return
+      const idEx = /** @type {{ id_exposicion?: number }} */ (row).id_exposicion
+      try {
+        if (idEx != null && Number.isFinite(Number(idEx))) {
+          await eliminarExposicion(Number(idEx))
+          await cargarExposicionesProximas()
+        } else {
+          setExhibitionRows((prev) => prev.filter((r) => !isSameExhibitionRow(r, row)))
+        }
+      } catch (e) {
+        window.alert(
+          e instanceof ApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : 'No se pudo eliminar la exposición.',
+        )
+      }
+    },
+    [cargarExposicionesProximas, setExhibitionRows],
+  )
 
   const handleAgregarExposicion = useCallback(() => {
     setModalExpoEditRow(null)
@@ -307,17 +359,29 @@ export function PaginaInicio({
   }, [])
 
   const handleGuardarExposicion = useCallback(
-    (row) => {
-      setExhibitionRows((prev) => {
-        if (modalExpoEditRow != null) {
-          return prev.map((r) =>
-            isSameExhibitionRow(r, modalExpoEditRow) ? row : r,
-          )
+    async (payload) => {
+      const { apiCreate, apiUpdate, idExposicion, clubesAdicionalesIds } = payload
+      try {
+        if (idExposicion != null && apiUpdate) {
+          await actualizarExposicion(idExposicion, apiUpdate)
+          await sincronizarClubesExposicionCatalogo(idExposicion, clubesAdicionalesIds)
+        } else if (apiCreate) {
+          const created = await crearExposicion(apiCreate)
+          const newId = Number(/** @type {{ id_exposicion?: unknown }} */ (created).id_exposicion)
+          if (Number.isFinite(newId)) {
+            await sincronizarClubesExposicionCatalogo(newId, clubesAdicionalesIds)
+          }
         }
-        return [...prev, row]
-      })
+        await cargarExposicionesProximas()
+      } catch (e) {
+        throw e instanceof ApiError
+          ? e
+          : new Error(
+              e instanceof Error ? e.message : 'No se pudo guardar la exposición.',
+            )
+      }
     },
-    [modalExpoEditRow, setExhibitionRows],
+    [cargarExposicionesProximas],
   )
 
   return (

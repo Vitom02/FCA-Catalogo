@@ -13,19 +13,32 @@ export function normalizeSexoEjemplarApi(raw) {
 /**
  * Fila de `GET /api/ejemplares` → fila de inscripción en tabla de anotados.
  * @param {Record<string, unknown>} row
- * @param {{ ordinal: number, categoria: string, username: string, id_categoria?: number | null }} ctx
+ * @param {{ ordinal?: number | string, categoria: string, username: string, id_categoria?: number | null }} ctx
  */
 export function ejemplarBusquedaApiToEnrollment(row, ctx) {
   const reg = row.registro
+  const sexo = normalizeSexoEjemplarApi(row.sexo)
+  const ord =
+    ctx.ordinal != null && ctx.ordinal !== ''
+      ? String(ctx.ordinal)
+      : ''
   const out = {
     'id ejemplar': String(row.id_ejemplar ?? ''),
-    nombre: String(row.nombre_completo ?? '—'),
-    sexo: normalizeSexoEjemplarApi(row.sexo),
-    federacion: String(row.codigo_pais ?? '—'),
+    nombre:
+      row.nombre_completo != null && String(row.nombre_completo).trim() !== ''
+        ? String(row.nombre_completo)
+        : '',
+    sexo: sexo === '—' ? '' : sexo,
+    federacion:
+      row.codigo_pais != null && String(row.codigo_pais).trim() !== ''
+        ? String(row.codigo_pais)
+        : '',
     categoria: ctx.categoria,
-    raza: String(row.raza ?? '—'),
-    ordinal: String(ctx.ordinal),
-    registro: reg != null && reg !== '' ? String(reg) : '—',
+    raza: row.raza != null && String(row.raza).trim() !== '' ? String(row.raza) : '',
+    /** `c.numero` en API; sin asignar hasta definir correlativo. */
+    numero: '',
+    ordinal: ord,
+    registro: reg != null && reg !== '' ? String(reg) : '',
     usuario: ctx.username,
   }
   if (ctx.id_categoria != null && Number.isFinite(Number(ctx.id_categoria))) {
