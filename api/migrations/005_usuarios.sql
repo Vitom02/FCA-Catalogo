@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS web.usuarios_categorias
 TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS web.usuarios_categorias
-    OWNER to postgres;
+    OWNER TO CURRENT_USER;
 
 CREATE TABLE IF NOT EXISTS web.usuarios
 (
@@ -37,4 +37,4 @@ CREATE TABLE IF NOT EXISTS web.usuarios
 TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS web.usuarios
-    OWNER to postgres;
+    OWNER TO CURRENT_USER;
