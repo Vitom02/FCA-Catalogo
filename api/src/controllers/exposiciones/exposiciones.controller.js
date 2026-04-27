@@ -41,8 +41,15 @@ function validarCrear(body) {
     if (v === undefined || v === null || v === "") {
       return `Falta el campo obligatorio: ${k}`;
     }
-    if (!Number.isFinite(Number(v))) {
+    const n =
+      k === "id_club"
+        ? Number.parseInt(String(v).trim(), 10)
+        : Number(v);
+    if (!Number.isFinite(n)) {
       return `El campo ${k} debe ser un número válido`;
+    }
+    if (k === "id_club" && n < 1) {
+      return "id_club debe ser un entero mayor a 0";
     }
   }
 
@@ -114,6 +121,10 @@ export async function crear(req, res) {
     const row = await exposicionesService.crear(req.body);
     res.status(201).json(row);
   } catch (err) {
+    if (err && err.code === "EXPO_ID_CLUB_INVALIDO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error(err);
     res.status(500).json({ error: err.message });
   }
@@ -140,6 +151,10 @@ export async function actualizar(req, res) {
     const row = await exposicionesService.actualizar(id, b);
     res.json(row);
   } catch (err) {
+    if (err && err.code === "EXPO_ID_CLUB_INVALIDO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error(err);
     res.status(500).json({ error: err.message });
   }

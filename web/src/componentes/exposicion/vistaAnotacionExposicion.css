@@ -88,6 +88,26 @@
   color: var(--card-text-muted);
 }
 
+.enrollment-modal__section-head--table {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.enrollment-modal__section-head--table .enrollment-modal__section-title {
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.enrollment-modal__section-head--table .enrollment-modal__btn--compact {
+  margin-left: auto;
+}
+
 .enrollment-modal__filters {
   display: flex;
   flex-direction: column;
@@ -852,9 +872,9 @@
 }
 
 .anotacion-tarjeta-card__categoria {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--table-grid);
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--table-grid);
   display: flex;
   flex-direction: column;
   gap: 8px;

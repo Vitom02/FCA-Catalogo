@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import './Cabecera.css'
 
 /**
- * @param {{ nombre?: string, apellido?: string, username?: string, usuario?: string }} session
+ * @param {{ nombre?: string, apellido?: string, username?: string, usuario?: string, role?: string }} session
  */
 function userInitials(session) {
   const n = String(session.nombre ?? '').trim()
@@ -29,9 +30,11 @@ function sessionTitle(session) {
 }
 
 export function Cabecera({ session, onLogout }) {
+  const location = useLocation()
   const menuId = useId()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
+  const enUsuarios = location.pathname === '/usuarios'
 
   useEffect(() => {
     if (!open) return
@@ -65,6 +68,14 @@ export function Cabecera({ session, onLogout }) {
 
         {session ? (
           <div className="app-header__session" ref={wrapRef}>
+            {session.role === 'superadmin' ? (
+              <Link
+                to={enUsuarios ? '/' : '/usuarios'}
+                className="app-header__link"
+              >
+                {enUsuarios ? 'Ir a exposiciones' : 'Ir a Usuarios'}
+              </Link>
+            ) : null}
             <div className="app-header__menu">
               <button
                 type="button"

@@ -1,0 +1,150 @@
+.admin-usuarios__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.admin-usuarios__back {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--card-text-muted);
+  text-decoration: none;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.admin-usuarios__back:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.admin-usuarios__section {
+  border: 1px solid var(--home-frame-border);
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 4px rgba(15, 39, 68, 0.06);
+}
+
+.admin-usuarios__hint {
+  margin: 0 0 10px;
+  font-size: 0.8125rem;
+  color: var(--card-text-muted);
+}
+
+.admin-usuarios__error {
+  color: #b91c1c;
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+}
+
+.admin-usuarios__clave {
+  display: inline-block;
+  max-width: 12rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  word-break: break-all;
+  color: var(--card-text);
+}
+
+.admin-usuarios__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-usuarios__btn--small {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+}
+
+/* Modal */
+.admin-user-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.admin-user-modal {
+  width: 100%;
+  max-width: 22rem;
+  max-height: min(90vh, 32rem);
+  overflow: auto;
+  border-radius: 10px;
+  padding: 16px 18px 14px;
+  background: var(--card-bg);
+  color: var(--card-text);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--home-frame-border);
+}
+
+.admin-user-modal__title {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.admin-user-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.admin-user-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-user-modal__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--card-text-muted);
+}
+
+.admin-user-modal__input,
+.admin-user-modal__select {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 6px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--card-text);
+}
+
+.admin-user-modal__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--card-text-muted);
+}
+
+.admin-user-modal__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px solid var(--input-border);
+}
+
+.admin-user-modal__err {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #b91c1c;
+}

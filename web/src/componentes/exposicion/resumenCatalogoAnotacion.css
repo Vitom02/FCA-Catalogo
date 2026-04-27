@@ -1,0 +1,146 @@
+.resumen-catalogo {
+  flex-shrink: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--home-frame-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 4px rgba(15, 39, 68, 0.06);
+  margin-bottom: 0;
+}
+
+.resumen-catalogo__title {
+  margin: 0 0 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--card-text-muted);
+}
+
+.resumen-catalogo__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--card-text-muted);
+}
+
+.resumen-catalogo__err {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #b91c1c;
+}
+
+.resumen-catalogo__arbol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resumen-catalogo__nodo {
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.resumen-catalogo__nodo--raza {
+  margin-top: 4px;
+}
+
+.resumen-catalogo__nodo > summary {
+  list-style: none;
+}
+
+.resumen-catalogo__nodo > summary::-webkit-details-marker {
+  display: none;
+}
+
+.resumen-catalogo__pildora {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--enrollment-pill-bg, rgba(15, 39, 68, 0.06));
+  border: 1px solid var(--input-border, rgba(15, 39, 68, 0.12));
+  font-size: 0.8125rem;
+  cursor: pointer;
+  color: var(--card-text);
+}
+
+.resumen-catalogo__nodo--grupo > .resumen-catalogo__pildora {
+  font-weight: 600;
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.resumen-catalogo__pildora--hoja {
+  cursor: default;
+  list-style: none;
+}
+
+ul.resumen-catalogo__lista-cat,
+.resumen-catalogo__totales-lista {
+  margin: 4px 0 0;
+  padding: 0 0 0 0.9rem;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resumen-catalogo__hijos {
+  margin: 4px 0 0 0.6rem;
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--input-border, rgba(15, 39, 68, 0.15));
+}
+
+.resumen-catalogo__label {
+  min-width: 0;
+  text-align: left;
+  word-break: break-word;
+}
+
+.resumen-catalogo__valor {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--card-text);
+}
+
+.resumen-catalogo__totales-cat {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--input-border);
+}
+
+.resumen-catalogo__totales-cat > .resumen-catalogo__pildora {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--card-text-muted);
+}
+
+.resumen-catalogo__totales-cat > .resumen-catalogo__pildora .resumen-catalogo__label {
+  font-weight: 600;
+  color: var(--card-text);
+}
+
+.resumen-catalogo__totales-lista {
+  padding-left: 0;
+}
+
+.resumen-catalogo__total-anotados {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background: rgba(15, 39, 68, 0.06);
+  border: 1px solid var(--input-border, rgba(15, 39, 68, 0.12));
+}

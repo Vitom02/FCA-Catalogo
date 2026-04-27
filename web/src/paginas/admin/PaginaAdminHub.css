@@ -1,0 +1,58 @@
+.admin-hub {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding-top: 8px;
+}
+
+.admin-hub__title {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--card-text);
+}
+
+.admin-hub__sub {
+  margin: 0 0 20px;
+  font-size: 0.9375rem;
+  color: var(--card-text-muted);
+}
+
+.admin-hub__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-hub__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  border: 1px solid var(--input-border);
+  background: var(--card-bg);
+  color: var(--card-text);
+  box-shadow: 0 1px 3px rgba(15, 39, 68, 0.08);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-hub__btn:hover {
+  background: var(--home-frame-border, rgba(0, 0, 0, 0.04));
+}
+
+.admin-hub__btn--primary {
+  border-color: var(--accent, #2563eb);
+  background: var(--accent, #2563eb);
+  color: #fff;
+}
+
+.admin-hub__btn--primary:hover {
+  filter: brightness(1.05);
+  background: var(--accent, #2563eb);
+}

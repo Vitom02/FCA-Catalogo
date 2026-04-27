@@ -24,6 +24,7 @@ import {
   matchUnicoEtiqueta,
   normalizarBusqueda,
 } from '../comun/BusquedaSelectTipo.jsx'
+import { ResumenCatalogoAnotacion } from './ResumenCatalogoAnotacion.jsx'
 import './vistaAnotacionExposicion.css'
 
 /** Misma convención que `ID_FEDERACION_FCA` en la API de ejemplares. */
@@ -194,6 +195,7 @@ export function VistaAnotacionExposicion({
   const [tarjetaEjemplar, setTarjetaEjemplar] = useState(
     /** @type {{ row: Record<string, unknown>, origin: 'busqueda' | 'nombre' } | null} */ (null),
   )
+  const tarjetaCategoriaSelectRef = useRef(/** @type {HTMLSelectElement | null} */ (null))
 
   const categoriasElegiblesTarjeta = useMemo(() => {
     if (!tarjetaEjemplar) return []
@@ -290,6 +292,19 @@ export function VistaAnotacionExposicion({
       setCategoriaSeleccionTarjeta('')
     }
   }, [tarjetaEjemplar, categoriasElegiblesTarjeta])
+
+  useEffect(() => {
+    if (!tarjetaEjemplar) return
+    const meses = mesesCompletosHastaReferencia(
+      tarjetaEjemplar.row.fecha_nacimiento,
+      exhibition['Fecha inicio'],
+    )
+    if (meses === null || categoriasElegiblesTarjeta.length === 0) return
+    const tid = window.setTimeout(() => {
+      tarjetaCategoriaSelectRef.current?.focus()
+    }, 0)
+    return () => window.clearTimeout(tid)
+  }, [tarjetaEjemplar, categoriasElegiblesTarjeta, exhibition])
 
   useEffect(() => {
     let cancelled = false
@@ -575,6 +590,23 @@ export function VistaAnotacionExposicion({
     exhibition['Fecha fin'],
   )
 
+  const idExposicion = useMemo(() => {
+    const raw = /** @type {{ id_exposicion?: unknown }} */ (exhibition).id_exposicion
+    const n = raw != null ? Number(raw) : NaN
+    return Number.isFinite(n) && n > 0 ? n : null
+  }, [exhibition])
+
+  const claveResumenCatalogo = useMemo(
+    () =>
+      enrollments
+        .map(
+          (e) =>
+            `${e.id_catalogo ?? ''},${e.categoria ?? ''},${e['id ejemplar'] ?? ''}`,
+        )
+        .join('|'),
+    [enrollments],
+  )
+
   /**
    * @param {Record<string, unknown>} row
    */
@@ -657,6 +689,22 @@ export function VistaAnotacionExposicion({
     onRemoveEnrollment(i)
   }
 
+  function handleExportarCatalogoExcel() {
+    if (catalogosCargando || catalogosError != null || enrollments.length === 0) return
+    void import('../../utilidades/exportCatalogoExcel.js')
+      .then(({ downloadCatalogoExposicionExcel }) => {
+        downloadCatalogoExposicionExcel({
+          exhibition,
+          enrollments,
+          columns: ENROLLMENT_TABLE_COLUMNS,
+          columnLabels: COLUMN_LABELS,
+        })
+      })
+      .catch(() => {
+        window.alert('No se pudo cargar la exportación a Excel. Reintentá o actualizá la página.')
+      })
+  }
+
   function renderTarjetaEjemplarOverlay() {
     if (!tarjetaEjemplar) return null
     const tr = tarjetaEjemplar.row
@@ -694,34 +742,13 @@ export function VistaAnotacionExposicion({
             Edad calculada al inicio de la exposición ({formatTableDate(fechaRef)}).
           </p>
           <div className="anotacion-tarjeta-card">
-            <dl className="anotacion-tarjeta-card__dl">
-              <div className="anotacion-tarjeta-card__row">
-                <dt>Nombre</dt>
-                <dd>{String(tr.nombre_completo ?? '—')}</dd>
-              </div>
-              <div className="anotacion-tarjeta-card__row">
-                <dt>Sexo</dt>
-                <dd>{normalizeSexoEjemplarApi(tr.sexo)}</dd>
-              </div>
-              <div className="anotacion-tarjeta-card__row">
-                <dt>Raza</dt>
-                <dd>{String(tr.raza ?? '—')}</dd>
-              </div>
-              <div className="anotacion-tarjeta-card__row">
-                <dt>Fecha de nacimiento</dt>
-                <dd>{formatTableDate(tr.fecha_nacimiento)}</dd>
-              </div>
-              <div className="anotacion-tarjeta-card__row">
-                <dt>Edad</dt>
-                <dd>{edadTxt}</dd>
-              </div>
-            </dl>
             <div className="anotacion-tarjeta-card__categoria">
               <label
                 className={`enrollment-modal__field anotacion-tarjeta-card__categoria-label${categoriaTarjetaError ? ' enrollment-modal__field--error' : ''}`}
               >
                 <span className="enrollment-modal__field-label">Categoría</span>
                 <select
+                  ref={tarjetaCategoriaSelectRef}
                   className="enrollment-modal__input enrollment-modal__select enrollment-modal__input--compact"
                   value={categoriaSeleccionTarjeta}
                   onChange={(e) => {
@@ -773,6 +800,28 @@ export function VistaAnotacionExposicion({
                 </p>
               ) : null}
             </div>
+            <dl className="anotacion-tarjeta-card__dl">
+              <div className="anotacion-tarjeta-card__row">
+                <dt>Nombre</dt>
+                <dd>{String(tr.nombre_completo ?? '—')}</dd>
+              </div>
+              <div className="anotacion-tarjeta-card__row">
+                <dt>Sexo</dt>
+                <dd>{normalizeSexoEjemplarApi(tr.sexo)}</dd>
+              </div>
+              <div className="anotacion-tarjeta-card__row">
+                <dt>Raza</dt>
+                <dd>{String(tr.raza ?? '—')}</dd>
+              </div>
+              <div className="anotacion-tarjeta-card__row">
+                <dt>Fecha de nacimiento</dt>
+                <dd>{formatTableDate(tr.fecha_nacimiento)}</dd>
+              </div>
+              <div className="anotacion-tarjeta-card__row">
+                <dt>Edad</dt>
+                <dd>{edadTxt}</dd>
+              </div>
+            </dl>
           </div>
           <footer className="anotacion-tarjeta-dialog__footer">
             <button
@@ -939,6 +988,11 @@ export function VistaAnotacionExposicion({
           </span>
         </h2>
       </header>
+
+      <ResumenCatalogoAnotacion
+        idExposicion={idExposicion}
+        refreshKey={claveResumenCatalogo}
+      />
 
       <section className="enrollment-modal__section">
         <h3 className="enrollment-modal__section-title">Inscribir ejemplar</h3>
@@ -1285,7 +1339,18 @@ export function VistaAnotacionExposicion({
       {renderEdicionCategoriaModal()}
 
       <section className="enrollment-modal__section enrollment-modal__section--table">
-        <h3 className="enrollment-modal__section-title">Ejemplares anotados</h3>
+        <div className="enrollment-modal__section-head--table">
+          <h3 className="enrollment-modal__section-title">Ejemplares anotados</h3>
+          <button
+            type="button"
+            className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact"
+            onClick={handleExportarCatalogoExcel}
+            disabled={catalogosCargando || catalogosError != null || enrollments.length === 0}
+            title="Descargar catálogo en Excel"
+          >
+            Exportar a Excel
+          </button>
+        </div>
         <div className="enrollment-modal__table-wrap">
           <table className="session-home__table enrollment-modal__table">
             <thead>

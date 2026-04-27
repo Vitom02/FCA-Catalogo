@@ -3,6 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-route
 import { listarClubes } from './apiConnect.jsx'
 import { Cabecera } from './componentes/layout/Cabecera.jsx'
 import { PaginaLogin } from './paginas/autenticacion/PaginaLogin.jsx'
+import { PaginaAdminHub } from './paginas/admin/PaginaAdminHub.jsx'
+import { PaginaUsuarios } from './paginas/admin/PaginaUsuarios.jsx'
 import { PaginaInicio } from './paginas/catalogo/PaginaInicio.jsx'
 import { PaginaExposicion } from './paginas/exposicion/PaginaExposicion.jsx'
 import { clearSession, getSession } from './autenticacion/testAuth.js'
@@ -30,7 +32,11 @@ function AppShell() {
 
   function handleLoggedIn(next) {
     setSession(next)
-    navigate('/', { replace: true })
+    if (next.role === 'superadmin') {
+      navigate('/admin', { replace: true })
+    } else {
+      navigate('/', { replace: true })
+    }
   }
 
   function handleLogout() {
@@ -45,6 +51,26 @@ function AppShell() {
       <main className="app-main" id="main-content">
         {session ? (
           <Routes>
+            <Route
+              path="/admin"
+              element={
+                session.role === 'superadmin' ? (
+                  <PaginaAdminHub />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+            <Route
+              path="/usuarios"
+              element={
+                session.role === 'superadmin' ? (
+                  <PaginaUsuarios session={session} clubes={clubes} />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
             <Route
               path="/"
               element={

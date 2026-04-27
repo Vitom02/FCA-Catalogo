@@ -105,6 +105,7 @@ export async function listar(req, res) {
       incluir_baja: q.incluir_baja,
       id_club: q.id_club,
       id_categoria: q.id_categoria,
+      incluir_clave: q.incluir_clave,
     });
     res.json(rows);
   } catch (err) {
@@ -120,7 +121,10 @@ export async function obtenerPorId(req, res) {
       res.status(400).json({ error: "id inválido" });
       return;
     }
-    const row = await usuariosService.obtenerPorId(id);
+    const q = req.query ?? {};
+    const row = await usuariosService.obtenerPorId(id, {
+      incluir_clave: q.incluir_clave,
+    });
     if (!row) {
       res.status(404).json({ error: "Usuario no encontrado" });
       return;

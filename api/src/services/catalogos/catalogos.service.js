@@ -91,6 +91,150 @@ export async function listarPorExposicionDetalle(idExposicion) {
   return r.rows.map(mapRow);
 }
 
+/**
+ * CTE + ventanas (`COUNT(*) OVER (PARTITION BY …)`), sin `GROUP BY`.
+ * Usa `web.razas.id_grupo` → `web.razas_grupos` para la etiqueta del grupo.
+ * Migración 010 asegura la columna en `razas` si faltara. NULL/0 = "Sin grupo".
+ * @param {number | string | null} idExposicion
+ * @returns {Promise<{ grupos: object[], totales_por_categoria: object[] }>}
+ */
+export async function resumenAgrupadoPorExposicion(idExposicion) {
+  const n = Number(idExposicion);
+  if (!Number.isFinite(n)) {
+    const err = new Error("id_exposicion inválido");
+    err.code = "CATALOGOS_FILTRO_INVALIDO";
+    throw err;
+  }
+
+  const T_EC = fromTable("exposiciones_categorias");
+
+  const baseCte = `
+    WITH base AS (
+      SELECT
+        c.id_exposicion,
+        c.id_catalogo,
+        c.id_categoria,
+        COALESCE(e.id_raza, 0)::int AS id_raza,
+        COALESCE(r.id_grupo, 0)::int AS id_grupo,
+        CASE
+          WHEN COALESCE(r.id_grupo, 0) = 0 THEN 'Sin grupo'
+          ELSE COALESCE(
+            NULLIF(TRIM(rg.grupo), ''),
+            'Grupo ' || r.id_grupo::text
+          )
+        END AS etiqueta_grupo,
+        COALESCE(
+          NULLIF(TRIM(r.codigo_raza), ''),
+          NULLIF(TRIM(r.raza), ''),
+          'Raza ' || COALESCE(e.id_raza, 0)::text
+        ) AS etiqueta_raza,
+        COALESCE(
+          NULLIF(TRIM(ec.categoria), ''),
+          'Cat. ' || c.id_categoria::text
+        ) AS categoria_etiqueta
+      FROM ${TABLE} c
+      INNER JOIN web.ejemplares e ON e.id_ejemplar = c.id_ejemplar
+      LEFT JOIN web.razas r ON r.id_raza = e.id_raza
+      LEFT JOIN web.razas_grupos rg ON rg.id_grupo = r.id_grupo
+      LEFT JOIN ${T_EC} ec ON ec.id_categoria = c.id_categoria
+      WHERE c.id_exposicion = $1
+    )`;
+
+  const rCeldas = await query(
+    `${baseCte}
+     SELECT DISTINCT ON (b.id_grupo, b.id_raza, b.id_categoria)
+       b.id_grupo,
+       b.etiqueta_grupo,
+       b.id_raza,
+       b.etiqueta_raza,
+       b.id_categoria,
+       b.categoria_etiqueta,
+       (COUNT(*) OVER (PARTITION BY b.id_exposicion, b.id_grupo))::int AS n_grupo,
+       (COUNT(*) OVER (PARTITION BY b.id_exposicion, b.id_grupo, b.id_raza))::int
+         AS n_raza,
+       (COUNT(*) OVER (
+         PARTITION BY b.id_exposicion, b.id_grupo, b.id_raza, b.id_categoria
+       ))::int AS n_celda
+     FROM base b
+     ORDER BY b.id_grupo, b.id_raza, b.id_categoria, b.id_catalogo`,
+    [n]
+  );
+
+  const rCat = await query(
+    `${baseCte}
+     SELECT DISTINCT ON (b.id_categoria)
+       b.id_categoria,
+       b.categoria_etiqueta,
+       (COUNT(*) OVER (PARTITION BY b.id_exposicion, b.id_categoria))::int AS total
+     FROM base b
+     ORDER BY b.id_categoria, b.id_catalogo`,
+    [n]
+  );
+
+  return {
+    grupos: buildResumenArbol(rCeldas.rows),
+    totales_por_categoria: (rCat.rows || []).map((row) => ({
+      id_categoria: row.id_categoria,
+      categoria: row.categoria_etiqueta,
+      total: row.total,
+    })),
+  };
+}
+
+/**
+ * @param {Record<string, unknown>[]} celdas
+ */
+function buildResumenArbol(celdas) {
+  if (!Array.isArray(celdas) || celdas.length === 0) {
+    return [];
+  }
+  const byG = new Map();
+  for (const row of celdas) {
+    const gk = Number(row.id_grupo);
+    const gKey = Number.isFinite(gk) ? gk : 0;
+    if (!byG.has(gKey)) {
+      byG.set(gKey, {
+        id_grupo: gKey,
+        etiqueta_grupo: String(row.etiqueta_grupo ?? "Sin grupo"),
+        total: Number(row.n_grupo) || 0,
+        razas: new Map(),
+      });
+    }
+    const g = byG.get(gKey);
+    const rk = Number(row.id_raza);
+    const rKey = Number.isFinite(rk) ? rk : 0;
+    if (!g.razas.has(rKey)) {
+      g.razas.set(rKey, {
+        id_raza: rKey,
+        etiqueta_raza: String(row.etiqueta_raza ?? "—"),
+        total: Number(row.n_raza) || 0,
+        categorias: [],
+      });
+    }
+    g.razas.get(rKey).categorias.push({
+      id_categoria: row.id_categoria,
+      categoria: String(row.categoria_etiqueta ?? "—"),
+      total: Number(row.n_celda) || 0,
+    });
+  }
+  return [...byG.values()]
+    .map((g) => ({
+      id_grupo: g.id_grupo,
+      etiqueta_grupo: g.etiqueta_grupo,
+      total: g.total,
+      razas: [...g.razas.values()].sort((a, b) =>
+        a.etiqueta_raza.localeCompare(b.etiqueta_raza, "es", {
+          sensitivity: "base",
+        })
+      ),
+    }))
+    .sort((a, b) => {
+      if (a.id_grupo === 0) return 1;
+      if (b.id_grupo === 0) return -1;
+      return a.id_grupo - b.id_grupo;
+    });
+}
+
 /** Inscriptos por exposición (`COUNT` desde `web.catalogos`). */
 export async function conteosPorExposicion() {
   const r = await query(

@@ -40,11 +40,24 @@ function optStr(v, maxLen) {
   return s;
 }
 
-/** Respuesta sin contraseña. */
-function mapUsuario(row) {
+/**
+ * @param {Record<string, unknown> | null} row
+ * @param {boolean} [incluirClave] si true, se devuelve el campo `clave` (p. ej. listado de administración).
+ */
+function mapUsuario(row, incluirClave = false) {
   if (!row) return null;
+  if (incluirClave) {
+    return { ...row };
+  }
   const { clave: _c, ...rest } = row;
   return rest;
+}
+
+function parseIncluirClave(raw) {
+  if (raw === true) return true;
+  if (raw === false) return false;
+  const s = String(raw ?? "").toLowerCase();
+  return s === "1" || s === "true" || s === "yes";
 }
 
 function parseIncluirBaja(raw) {
@@ -83,10 +96,12 @@ export async function obtenerCategoriaPorId(idCategoria) {
  *   incluir_baja?: boolean;
  *   id_club?: number | string | null;
  *   id_categoria?: number | string | null;
+ *   incluir_clave?: boolean | string | null;
  * }} [filtros]
  */
 export async function listar(filtros = {}) {
   const incluir = parseIncluirBaja(filtros.incluir_baja);
+  const incluirClave = parseIncluirClave(filtros.incluir_clave);
   const cond = [];
   const params = [];
   let p = 1;
@@ -108,29 +123,36 @@ export async function listar(filtros = {}) {
   }
 
   const where = cond.length ? `WHERE ${cond.join(" AND ")}` : "";
+  const colClave = incluirClave ? `, u.clave` : "";
 
   const r = await query(
     `SELECT u.id_usuario, u.nombre, u.apellido, u.id_club, u.id_categoria, u.usuario, u.baja,
-            c.categoria AS categoria_nombre
+            c.categoria AS categoria_nombre${colClave}
      FROM ${TABLE_USUARIOS} u
      LEFT JOIN ${TABLE_CATEGORIAS} c ON c.id_categoria = u.id_categoria
      ${where}
      ORDER BY u.id_usuario`,
     params
   );
-  return r.rows.map(mapUsuario);
+  return r.rows.map((row) => mapUsuario(row, incluirClave));
 }
 
-export async function obtenerPorId(idUsuario) {
+/**
+ * @param {number} idUsuario
+ * @param {{ incluir_clave?: boolean | string | null }} [opts] si `incluir_clave`, la respuesta incluye la clave (texto plano).
+ */
+export async function obtenerPorId(idUsuario, opts = {}) {
+  const incluirClave = parseIncluirClave(opts.incluir_clave);
+  const colClave = incluirClave ? `, u.clave` : "";
   const r = await query(
     `SELECT u.id_usuario, u.nombre, u.apellido, u.id_club, u.id_categoria, u.usuario, u.baja,
-            c.categoria AS categoria_nombre
+            c.categoria AS categoria_nombre${colClave}
      FROM ${TABLE_USUARIOS} u
      LEFT JOIN ${TABLE_CATEGORIAS} c ON c.id_categoria = u.id_categoria
      WHERE u.id_usuario = $1`,
     [idUsuario]
   );
-  return mapUsuario(r.rows[0] ?? null);
+  return mapUsuario(r.rows[0] ?? null, incluirClave);
 }
 
 /**

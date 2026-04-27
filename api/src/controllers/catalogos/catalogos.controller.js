@@ -52,6 +52,25 @@ export async function listarPorExposicionDetalle(req, res) {
   }
 }
 
+export async function resumenAgrupadoPorExposicion(req, res) {
+  try {
+    const id = parseId(req.params.idExposicion);
+    if (!id) {
+      res.status(400).json({ error: "id inválido" });
+      return;
+    }
+    const data = await catalogosService.resumenAgrupadoPorExposicion(id);
+    res.json(data);
+  } catch (err) {
+    if (err.code === "CATALOGOS_FILTRO_INVALIDO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 export async function listarConteos(_req, res) {
   try {
     const rows = await catalogosService.conteosPorExposicion();

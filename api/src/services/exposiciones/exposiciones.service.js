@@ -28,6 +28,20 @@ const COLUMNAS_ENTERAS_OPCIONALES = new Set([
   "numeros_extra_cachorros",
 ]);
 
+/** BD legada: NOT NULL en texto; sin valor → '' */
+const COLUMNAS_TEXTO_NOT_NULL_LEGACY = new Set([
+  "organizador",
+  "texto1",
+  "texto2",
+  "texto3",
+  "texto4",
+  "texto5",
+  "ubicacion",
+]);
+
+/** BD legada: lat/long NOT NULL; sin valor → 0 (marcador “sin coordenadas”). */
+const COLUMNAS_COORD_NOT_NULL_LEGACY = new Set(["latitud", "longitud"]);
+
 /** Lecturas con nombre del club (JOIN clubes.club). */
 const SELECT_BASE = `
   SELECT
@@ -121,16 +135,33 @@ function optStr(v) {
   return s === "" ? null : s;
 }
 
+/** Texto para columnas NOT NULL en BD legada (vacío → '' en lugar de NULL). */
+function strNotNull(v) {
+  const s = optStr(v);
+  return s === null ? "" : s;
+}
+
 function optNum(v) {
   if (v === undefined || v === null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
+function coordLegacyNN(v) {
+  const n = optNum(v);
+  return n === null ? 0 : n;
+}
+
 function optIntNullable(v) {
   if (v === undefined || v === null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function parseIdClubObligatorio(v) {
+  const n = Number.parseInt(String(v ?? "").trim(), 10);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return n;
 }
 
 export async function crear(payload) {
@@ -156,6 +187,13 @@ export async function crear(payload) {
     numeros_extra_cachorros,
   } = payload;
 
+  const idClub = parseIdClubObligatorio(id_club);
+  if (idClub == null) {
+    const err = new Error("id_club inválido");
+    err.code = "EXPO_ID_CLUB_INVALIDO";
+    throw err;
+  }
+
   const r = await query(
     `INSERT INTO exposiciones (
       exposicion, desde, hasta, id_club, id_tipo, ano, id_mes,
@@ -173,19 +211,19 @@ export async function crear(payload) {
       String(exposicion).trim(),
       desde,
       hasta,
-      Number(id_club),
+      idClub,
       Number(id_tipo),
       Number(ano),
       Number(id_mes),
-      optStr(organizador),
-      optStr(texto1),
-      optStr(texto2),
-      optStr(texto3),
-      optStr(texto4),
-      optStr(texto5),
-      optNum(latitud),
-      optNum(longitud),
-      optStr(ubicacion),
+      strNotNull(organizador),
+      strNotNull(texto1),
+      strNotNull(texto2),
+      strNotNull(texto3),
+      strNotNull(texto4),
+      strNotNull(texto5),
+      coordLegacyNN(latitud),
+      coordLegacyNN(longitud),
+      strNotNull(ubicacion),
       optIntNullable(cantidad),
       optIntNullable(numeros_extra_razas),
       optIntNullable(numeros_extra_cachorros),
@@ -208,6 +246,18 @@ export async function actualizar(idExposicion, payload) {
       let v = payload[col];
       if (COLUMNAS_ENTERAS_OPCIONALES.has(col)) {
         v = optIntNullable(v);
+      } else if (COLUMNAS_TEXTO_NOT_NULL_LEGACY.has(col)) {
+        v = strNotNull(v);
+      } else if (COLUMNAS_COORD_NOT_NULL_LEGACY.has(col)) {
+        v = coordLegacyNN(v);
+      } else if (col === "id_club") {
+        const ic = parseIdClubObligatorio(v);
+        if (ic == null) {
+          const err = new Error("id_club inválido");
+          err.code = "EXPO_ID_CLUB_INVALIDO";
+          throw err;
+        }
+        v = ic;
       }
       values.push(v);
       i += 1;

@@ -60,6 +60,10 @@ function toOptIntStr(s) {
  */
 function buildApiBody(form) {
   const nombre = form.nombre.trim()
+  const idClub = Number.parseInt(String(form.kennelId ?? '').trim(), 10)
+  if (!Number.isFinite(idClub) || idClub < 1) {
+    throw new Error('Elegí un club organizador válido de la lista.')
+  }
   const parts = form.fechaInicio.split('-').map((x) => parseInt(x, 10))
   const y = parts[0]
   const m = parts[1]
@@ -70,7 +74,7 @@ function buildApiBody(form) {
     exposicion: nombre,
     desde: form.fechaInicio,
     hasta: form.fechaFin,
-    id_club: Number(form.kennelId),
+    id_club: idClub,
     id_tipo: EXPO_ID_TIPO_DEFAULT,
     ano: y,
     id_mes: m,
@@ -220,14 +224,16 @@ export function ModalAgregarExposicion({
   async function handleSubmit(e) {
     e.preventDefault()
     const nombre = form.nombre.trim()
+    const kennelOk = Number.parseInt(String(form.kennelId ?? '').trim(), 10)
     if (
       !nombre ||
       !form.fechaInicio ||
       !form.fechaFin ||
-      !form.kennelId ||
+      !Number.isFinite(kennelOk) ||
+      kennelOk < 1 ||
       !String(form.cantidad).trim()
     ) {
-      window.alert('Completá nombre, fechas, club y cantidad.')
+      window.alert('Completá nombre, fechas, club organizador (elegí de la lista) y cantidad.')
       return
     }
     if (form.fechaFin < form.fechaInicio) {

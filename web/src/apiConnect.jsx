@@ -188,6 +188,17 @@ export function listarCatalogosPorExposicionDetalle(idExposicion) {
 }
 
 /**
+ * Resumen jerárquico (grupo → raza → categoría) y totales por categoría, vía `COUNT(*) OVER` en la API.
+ * @param {number | string} idExposicion
+ */
+export function obtenerResumenCatalogoAgrupado(idExposicion) {
+  return request(
+    'GET',
+    `/api/catalogos/exposicion/${encodeURIComponent(String(idExposicion))}/resumen`,
+  )
+}
+
+/**
  * @param {{
  *   id_exposicion: number,
  *   id_ejemplar: number,
@@ -266,6 +277,47 @@ export function obtenerEjemplarPorId(id) {
 /** URL base actual (por si necesitás log o debug). Vacío = mismo origen que la web. */
 export function getApiBaseUrl() {
   return API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+}
+
+// ─── USUARIOS (CRUD; la API no exige token; el acceso se controla en la app) ───
+
+/** Categorías de permiso (`usuarios_categorias`). */
+export function listarCategoriasUsuarios() {
+  return request('GET', '/api/usuarios/categorias')
+}
+
+/**
+ * @param {{ incluir_baja?: string | number | boolean, id_club?: string | number, id_categoria?: string | number, incluir_clave?: string | number | boolean }} [query]
+ * `incluir_clave`: si es verdadero, la API devuelve la clave en texto plano (solo para panel de administración).
+ */
+export function listarUsuarios(query) {
+  return request('GET', '/api/usuarios', { query })
+}
+
+/**
+ * @param {string | number} id
+ * @param {{ incluir_clave?: string | number | boolean }} [query]
+ */
+export function obtenerUsuarioPorId(id, query) {
+  return request('GET', `/api/usuarios/${encodeURIComponent(String(id))}`, { query })
+}
+
+/**
+ * @param {{ nombre?: string, apellido?: string, id_club?: number | null, id_categoria: number, usuario: string, clave: string, baja?: boolean }} payload
+ */
+export function crearUsuario(payload) {
+  return request('POST', '/api/usuarios', { body: payload })
+}
+
+/**
+ * @param {Record<string, unknown>} payload
+ */
+export function actualizarUsuario(id, payload) {
+  return request('PUT', `/api/usuarios/${encodeURIComponent(String(id))}`, { body: payload })
+}
+
+export function eliminarUsuario(id) {
+  return request('DELETE', `/api/usuarios/${encodeURIComponent(String(id))}`)
 }
 
 // ─── AUTENTICACIÓN ───────────────────────────────────────────────────────────
