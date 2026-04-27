@@ -75,10 +75,19 @@ export async function listarPorExposicionDetalle(idExposicion) {
          NULLIF(TRIM(COALESCE(r.codigo_raza, e.codigo_raza)), ''),
          NULLIF(TRIM(r.raza), '')
        ) AS raza,
+       COALESCE(r.id_grupo, 0)::int AS id_grupo,
+       CASE
+         WHEN COALESCE(r.id_grupo, 0) = 0 THEN 'Sin grupo'
+         ELSE COALESCE(
+           NULLIF(TRIM(rg.grupo), ''),
+           'Grupo ' || r.id_grupo::text
+         )
+       END AS grupo_etiqueta,
        COALESCE(e.registro::VARCHAR, e.registro_origen::VARCHAR) AS registro
      FROM ${TABLE} c
      LEFT JOIN web.ejemplares e ON e.id_ejemplar = c.id_ejemplar
      LEFT JOIN web.razas r ON r.id_raza = e.id_raza
+     LEFT JOIN web.razas_grupos rg ON rg.id_grupo = r.id_grupo
      LEFT JOIN web.federaciones f ON f.id_federacion = e.id_federacion
      LEFT JOIN web.federaciones fo ON fo.id_federacion = e.id_federacion_origen
      LEFT JOIN web.federaciones fp ON fp.codigo_pais = COALESCE(f.codigo_pais, fo.codigo_pais, e.codigo_pais)

@@ -43,7 +43,8 @@ function focusSiguienteEnAlcance(current, scopeSelector) {
 }
 
 /**
- * Texto + datalist; Tab completa si hay una sola coincidencia.
+ * Texto + datalist; Tab completa con la primera opción cuyo texto incluye lo escrito
+ * (si hay una sola coincidencia, es esa; si hay varias, la primera de la lista).
  * @param {{
  *   items: unknown[],
  *   getId: (item: unknown) => string | number,
@@ -68,7 +69,7 @@ export function BusquedaSelectTipo({
   onValueIdChange,
   onInputTextChange,
   ariaLabel,
-  placeholder = 'Escribí; Tab completa si hay una sola coincidencia',
+  placeholder = 'Escribí; Tab usa la primera coincidencia de la lista',
   className = '',
   scopeSelector,
   disabled = false,
@@ -99,11 +100,20 @@ export function BusquedaSelectTipo({
         onKeyDown={(e) => {
           if (disabled) return
           if (e.key !== 'Tab' || e.shiftKey) return
-          const u = matchUnicoEtiqueta(items, getLabel, inputText)
-          if (!u) return
+          const t = String(inputText ?? '').trim()
+          const exact = t !== '' ? items.find((it) => getLabel(it) === t) : null
+          const q = normalizarBusqueda(inputText)
+          let pick = exact
+          if (!pick && q) {
+            const cand = items.filter((it) =>
+              normalizarBusqueda(getLabel(it)).includes(q),
+            )
+            pick = cand.length > 0 ? cand[0] : null
+          }
+          if (!pick) return
           e.preventDefault()
-          onValueIdChange(String(getId(u)))
-          onInputTextChange(getLabel(u))
+          onValueIdChange(String(getId(pick)))
+          onInputTextChange(getLabel(pick))
           if (scopeSelector && e.currentTarget instanceof HTMLElement) {
             const el = e.currentTarget
             requestAnimationFrame(() => focusSiguienteEnAlcance(el, scopeSelector))

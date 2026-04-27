@@ -179,6 +179,13 @@ export function VistaAnotacionExposicion({
   )
   const [editCategoriaCargando, setEditCategoriaCargando] = useState(false)
 
+  const [filtroTablaRaza, setFiltroTablaRaza] = useState('')
+  const [textoFiltroTablaRaza, setTextoFiltroTablaRaza] = useState('')
+  const [filtroTablaGrupo, setFiltroTablaGrupo] = useState('')
+  const [textoFiltroTablaGrupo, setTextoFiltroTablaGrupo] = useState('')
+  const [filtroTablaCategoria, setFiltroTablaCategoria] = useState('')
+  const [textoFiltroTablaCategoria, setTextoFiltroTablaCategoria] = useState('')
+
   const [nombreModalOpen, setNombreModalOpen] = useState(false)
   const [nmSexo, setNmSexo] = useState('Macho')
   const [nmFed, setNmFed] = useState('')
@@ -211,6 +218,47 @@ export function VistaAnotacionExposicion({
     () => new Set(enrollments.map((e) => String(e['id ejemplar'] ?? ''))),
     [enrollments],
   )
+
+  const razaItemsTabla = useMemo(() => {
+    const vals = [
+      ...new Set(enrollments.map((e) => String(e.raza ?? '').trim()).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+    return vals.map((label) => ({ id: label, label }))
+  }, [enrollments])
+
+  const grupoItemsTabla = useMemo(() => {
+    const vals = [
+      ...new Set(enrollments.map((e) => String(e.grupo ?? '').trim()).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+    return vals.map((label) => ({ id: label, label }))
+  }, [enrollments])
+
+  const categoriaItemsTabla = useMemo(() => {
+    const vals = [
+      ...new Set(enrollments.map((e) => String(e.categoria ?? '').trim()).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+    return vals.map((label) => ({ id: label, label }))
+  }, [enrollments])
+
+  const enrollmentFilasFiltradas = useMemo(() => {
+    return enrollments
+      .map((row, i) => ({ row, i }))
+      .filter(({ row }) => {
+        if (filtroTablaRaza && String(row.raza ?? '').trim() !== filtroTablaRaza) {
+          return false
+        }
+        if (filtroTablaGrupo && String(row.grupo ?? '').trim() !== filtroTablaGrupo) {
+          return false
+        }
+        if (
+          filtroTablaCategoria &&
+          String(row.categoria ?? '').trim() !== filtroTablaCategoria
+        ) {
+          return false
+        }
+        return true
+      })
+  }, [enrollments, filtroTablaRaza, filtroTablaGrupo, filtroTablaCategoria])
 
   const filaEdicionCategoria = useMemo(() => {
     if (editCategoriaIndex == null) return null
@@ -689,6 +737,15 @@ export function VistaAnotacionExposicion({
     onRemoveEnrollment(i)
   }
 
+  function limpiarFiltrosTabla() {
+    setFiltroTablaRaza('')
+    setTextoFiltroTablaRaza('')
+    setFiltroTablaGrupo('')
+    setTextoFiltroTablaGrupo('')
+    setFiltroTablaCategoria('')
+    setTextoFiltroTablaCategoria('')
+  }
+
   function handleExportarCatalogoExcel() {
     if (catalogosCargando || catalogosError != null || enrollments.length === 0) return
     void import('../../utilidades/exportCatalogoExcel.js')
@@ -839,6 +896,11 @@ export function VistaAnotacionExposicion({
   }
 
   const colCount = ENROLLMENT_TABLE_COLUMNS.length + 1
+  const filtrosTablaActivos = Boolean(
+    filtroTablaRaza || filtroTablaGrupo || filtroTablaCategoria,
+  )
+  const tablaFiltrosDeshabilitados =
+    catalogosCargando || catalogosError != null || enrollments.length === 0
 
   function renderEdicionCategoriaModal() {
     if (editCategoriaIndex == null) return null
@@ -996,17 +1058,21 @@ export function VistaAnotacionExposicion({
 
       <section className="enrollment-modal__section">
         <h3 className="enrollment-modal__section-title">Inscribir ejemplar</h3>
-        {catalogoCargando ? (
-          <p className="enrollment-modal__hint" aria-live="polite">
-            Cargando federaciones, razas y categorías…
-          </p>
-        ) : null}
-        {catalogoError ? (
-          <p className="enrollment-modal__hint enrollment-modal__hint--error" role="alert">
-            {catalogoError} Revisá que la API esté en marcha y las rutas{' '}
-            <code>/api/ejemplares/federaciones</code>, <code>/api/ejemplares/razas</code> y{' '}
-            <code>/api/ejemplares/categorias</code>.
-          </p>
+        {catalogoCargando || catalogoError ? (
+          <div className="anotacion-messages-strip">
+            {catalogoCargando ? (
+              <p className="enrollment-modal__hint" aria-live="polite">
+                Cargando federaciones, razas y categorías…
+              </p>
+            ) : null}
+            {catalogoError ? (
+              <p className="enrollment-modal__hint enrollment-modal__hint--error" role="alert">
+                {catalogoError} Revisá que la API esté en marcha y las rutas{' '}
+                <code>/api/ejemplares/federaciones</code>, <code>/api/ejemplares/razas</code> y{' '}
+                <code>/api/ejemplares/categorias</code>.
+              </p>
+            ) : null}
+          </div>
         ) : null}
         <form className="enrollment-modal__filters" onSubmit={handleBuscarEjemplaresApi}>
           <div className="enrollment-modal__filters-toolbar">
@@ -1021,7 +1087,7 @@ export function VistaAnotacionExposicion({
                   inputText={textoBusqFederacion}
                   onValueIdChange={setIdFederacion}
                   onInputTextChange={setTextoBusqFederacion}
-                  aria-label="Federación (obligatorio); Tab completa si hay una sola coincidencia"
+                  aria-label="Federación (obligatorio); Tab completa con la primera coincidencia"
                   placeholder=""
                   className="enrollment-modal__input enrollment-modal__input--compact"
                   scopeSelector=".enrollment-modal__filters-fields--compact"
@@ -1038,7 +1104,7 @@ export function VistaAnotacionExposicion({
                   inputText={textoBusqRaza}
                   onValueIdChange={setIdRaza}
                   onInputTextChange={setTextoBusqRaza}
-                  aria-label="Raza (obligatorio); Tab completa si hay una sola coincidencia"
+                  aria-label="Raza (obligatorio); Tab completa con la primera coincidencia"
                   placeholder=""
                   className="enrollment-modal__input enrollment-modal__input--compact"
                   scopeSelector=".enrollment-modal__filters-fields--compact"
@@ -1093,16 +1159,7 @@ export function VistaAnotacionExposicion({
         </form>
 
         <div className="enrollment-modal__results">
-          {!haBuscado ? (
-            <p className="enrollment-modal__hint">
-              Completá <strong>federación</strong>, <strong>raza</strong> y{' '}
-              <strong>número de registro</strong> (los tres son obligatorios) y pulsá «Buscar».
-              En federación y raza podés escribir para buscar; con <strong>Tab</strong> se completa la
-              opción si solo hay una coincidencia con lo escrito.
-              Si hay coincidencias, verás la tarjeta del ejemplar y podrás anotar con la categoría
-              que corresponda.
-            </p>
-          ) : busquedaLoading ? (
+          {!haBuscado ? null : busquedaLoading ? (
             <p className="enrollment-modal__hint">Buscando…</p>
           ) : busquedaError ? (
             <p className="enrollment-modal__hint enrollment-modal__hint--error" role="alert">
@@ -1207,7 +1264,7 @@ export function VistaAnotacionExposicion({
                       inputText={textoNmFed}
                       onValueIdChange={setNmFed}
                       onInputTextChange={setTextoNmFed}
-                      aria-label="Federación (obligatorio); Tab completa si hay una sola coincidencia"
+                      aria-label="Federación (obligatorio); Tab completa con la primera coincidencia"
                       placeholder=""
                       className="enrollment-modal__input enrollment-modal__select"
                       scopeSelector=".anotacion-nombre-form__row--tercios"
@@ -1224,7 +1281,7 @@ export function VistaAnotacionExposicion({
                     inputText={textoNmRaza}
                     onValueIdChange={setNmRaza}
                     onInputTextChange={setTextoNmRaza}
-                    aria-label="Raza (obligatorio); Tab completa si hay una sola coincidencia"
+                    aria-label="Raza (obligatorio); Tab completa con la primera coincidencia"
                     placeholder=""
                     className="enrollment-modal__input enrollment-modal__select"
                     scopeSelector=".anotacion-nombre-form__row--tercios"
@@ -1351,6 +1408,74 @@ export function VistaAnotacionExposicion({
             Exportar a Excel
           </button>
         </div>
+        <div
+          className="enrollment-modal__table-filters anotacion-tabla-filtros"
+          role="search"
+          aria-label="Filtrar ejemplares anotados por raza, grupo o categoría"
+        >
+          <p className="enrollment-modal__table-filters-label">Filtrar tabla</p>
+          <div className="enrollment-modal__table-filters-fields">
+            <label className="enrollment-modal__field">
+              <span className="enrollment-modal__field-label">Raza</span>
+              <BusquedaSelectTipo
+                items={razaItemsTabla}
+                getId={(x) => /** @type {{ id: string }} */ (x).id}
+                getLabel={(x) => /** @type {{ label: string }} */ (x).label}
+                valueId={filtroTablaRaza}
+                inputText={textoFiltroTablaRaza}
+                onValueIdChange={setFiltroTablaRaza}
+                onInputTextChange={setTextoFiltroTablaRaza}
+                aria-label="Filtrar por raza (como en la búsqueda de arriba)"
+                placeholder="Todas"
+                className="enrollment-modal__input enrollment-modal__input--compact"
+                scopeSelector=".anotacion-tabla-filtros"
+                disabled={tablaFiltrosDeshabilitados}
+              />
+            </label>
+            <label className="enrollment-modal__field">
+              <span className="enrollment-modal__field-label">Grupo</span>
+              <BusquedaSelectTipo
+                items={grupoItemsTabla}
+                getId={(x) => /** @type {{ id: string }} */ (x).id}
+                getLabel={(x) => /** @type {{ label: string }} */ (x).label}
+                valueId={filtroTablaGrupo}
+                inputText={textoFiltroTablaGrupo}
+                onValueIdChange={setFiltroTablaGrupo}
+                onInputTextChange={setTextoFiltroTablaGrupo}
+                aria-label="Filtrar por grupo FCI"
+                placeholder="Todos"
+                className="enrollment-modal__input enrollment-modal__input--compact"
+                scopeSelector=".anotacion-tabla-filtros"
+                disabled={tablaFiltrosDeshabilitados}
+              />
+            </label>
+            <label className="enrollment-modal__field">
+              <span className="enrollment-modal__field-label">Categoría</span>
+              <BusquedaSelectTipo
+                items={categoriaItemsTabla}
+                getId={(x) => /** @type {{ id: string }} */ (x).id}
+                getLabel={(x) => /** @type {{ label: string }} */ (x).label}
+                valueId={filtroTablaCategoria}
+                inputText={textoFiltroTablaCategoria}
+                onValueIdChange={setFiltroTablaCategoria}
+                onInputTextChange={setTextoFiltroTablaCategoria}
+                aria-label="Filtrar por categoría"
+                placeholder="Todas"
+                className="enrollment-modal__input enrollment-modal__input--compact"
+                scopeSelector=".anotacion-tabla-filtros"
+                disabled={tablaFiltrosDeshabilitados}
+              />
+            </label>
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact enrollment-modal__table-filters-clear"
+              onClick={limpiarFiltrosTabla}
+              disabled={tablaFiltrosDeshabilitados || !filtrosTablaActivos}
+            >
+              Quitar filtros
+            </button>
+          </div>
+        </div>
         <div className="enrollment-modal__table-wrap">
           <table className="session-home__table enrollment-modal__table">
             <thead>
@@ -1391,8 +1516,14 @@ export function VistaAnotacionExposicion({
                     Todavía no hay ejemplares anotados en esta exposición.
                   </td>
                 </tr>
+              ) : enrollmentFilasFiltradas.length === 0 ? (
+                <tr>
+                  <td className="session-home__empty" colSpan={colCount}>
+                    Ningún ejemplar coincide con los filtros de la tabla.
+                  </td>
+                </tr>
               ) : (
-                enrollments.map((row, i) => {
+                enrollmentFilasFiltradas.map(({ row, i }) => {
                   const rk = row.id_catalogo ?? row['id ejemplar']
                   return (
                     <tr key={`${rk}-${i}`}>

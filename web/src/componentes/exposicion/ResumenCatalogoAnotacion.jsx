@@ -114,21 +114,33 @@ export function ResumenCatalogoAnotacion({ idExposicion, refreshKey = 0 }) {
   if (grupos.length === 0 && totalesCat.length === 0) {
     return (
       <section className="resumen-catalogo" aria-labelledby={titleId}>
-        <h3 id={titleId} className="resumen-catalogo__title">
-          Resumen del catálogo
-        </h3>
-        <p className="resumen-catalogo__hint">Todavía no hay inscriptos en esta exposición.</p>
+        <details className="resumen-catalogo__raiz">
+          <summary className="resumen-catalogo__summary-raiz">
+            <h3 id={titleId} className="resumen-catalogo__title resumen-catalogo__title--en-summary">
+              Resumen del catálogo
+            </h3>
+            <span className="resumen-catalogo__valor">0</span>
+          </summary>
+          <p className="resumen-catalogo__hint resumen-catalogo__hint--en-raiz">
+            Todavía no hay inscriptos en esta exposición.
+          </p>
+        </details>
       </section>
     )
   }
 
   return (
     <section className="resumen-catalogo" aria-labelledby={titleId}>
-      <h3 id={titleId} className="resumen-catalogo__title">
-        Resumen del catálogo
-      </h3>
+      <details className="resumen-catalogo__raiz">
+        <summary className="resumen-catalogo__summary-raiz">
+          <h3 id={titleId} className="resumen-catalogo__title resumen-catalogo__title--en-summary">
+            Resumen del catálogo
+          </h3>
+          <span className="resumen-catalogo__valor">{totalAnotados}</span>
+        </summary>
 
-      <div className="resumen-catalogo__arbol" role="tree">
+        <div className="resumen-catalogo__interior">
+          <div className="resumen-catalogo__arbol" role="tree">
         {grupos.map((g) => {
           const go = g && typeof g === 'object' ? g : {}
           const eg = String(go.etiqueta_grupo ?? 'Grupo')
@@ -138,7 +150,6 @@ export function ResumenCatalogoAnotacion({ idExposicion, refreshKey = 0 }) {
             <details
               key={`g-${eg}-${go.id_grupo}`}
               className="resumen-catalogo__nodo resumen-catalogo__nodo--grupo"
-              open
             >
               <summary className="resumen-catalogo__pildora">
                 <span className="resumen-catalogo__label">{eg}</span>
@@ -154,7 +165,6 @@ export function ResumenCatalogoAnotacion({ idExposicion, refreshKey = 0 }) {
                     <details
                       key={`r-${er}-${ro.id_raza}`}
                       className="resumen-catalogo__nodo resumen-catalogo__nodo--raza"
-                      open
                     >
                       <summary className="resumen-catalogo__pildora">
                         <span className="resumen-catalogo__label">{er}</span>
@@ -183,46 +193,45 @@ export function ResumenCatalogoAnotacion({ idExposicion, refreshKey = 0 }) {
             </details>
           )
         })}
-      </div>
-
-      {totalesCat.length > 0 ? (
-        <details
-          className="resumen-catalogo__nodo resumen-catalogo__nodo--grupo resumen-catalogo__totales-cat"
-          open
-        >
-          <summary className="resumen-catalogo__pildora">
-            <span className="resumen-catalogo__label">
-              Por categoría (total exposición)
-            </span>
-            <span className="resumen-catalogo__valor">{totalGral}</span>
-          </summary>
-          <div className="resumen-catalogo__hijos" role="group">
-            <ul className="resumen-catalogo__totales-lista">
-              {totalesCat.map((t) => {
-                const o = t && typeof t === 'object' ? t : {}
-                return (
-                  <li
-                    key={String(o.id_categoria ?? o.categoria)}
-                    className="resumen-catalogo__pildora resumen-catalogo__pildora--hoja"
-                  >
-                    <span className="resumen-catalogo__label">
-                      {String(o.categoria ?? '—')}
-                    </span>
-                    <span className="resumen-catalogo__valor">
-                      {Number(o.total) || 0}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
           </div>
-        </details>
-      ) : null}
 
-      <p className="resumen-catalogo__total-anotados" role="status">
-        <span className="resumen-catalogo__label">Total anotados</span>
-        <span className="resumen-catalogo__valor">{totalAnotados}</span>
-      </p>
+          {totalesCat.length > 0 ? (
+            <details className="resumen-catalogo__nodo resumen-catalogo__nodo--grupo resumen-catalogo__totales-cat">
+              <summary className="resumen-catalogo__pildora">
+                <span className="resumen-catalogo__label">
+                  Por categoría (total exposición)
+                </span>
+                <span className="resumen-catalogo__valor">{totalGral}</span>
+              </summary>
+              <div className="resumen-catalogo__hijos" role="group">
+                <ul className="resumen-catalogo__totales-lista">
+                  {totalesCat.map((t) => {
+                    const o = t && typeof t === 'object' ? t : {}
+                    return (
+                      <li
+                        key={String(o.id_categoria ?? o.categoria)}
+                        className="resumen-catalogo__pildora resumen-catalogo__pildora--hoja"
+                      >
+                        <span className="resumen-catalogo__label">
+                          {String(o.categoria ?? '—')}
+                        </span>
+                        <span className="resumen-catalogo__valor">
+                          {Number(o.total) || 0}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </details>
+          ) : null}
+
+          <p className="resumen-catalogo__total-anotados" role="status">
+            <span className="resumen-catalogo__label">Total anotados</span>
+            <span className="resumen-catalogo__valor">{totalAnotados}</span>
+          </p>
+        </div>
+      </details>
     </section>
   )
 }

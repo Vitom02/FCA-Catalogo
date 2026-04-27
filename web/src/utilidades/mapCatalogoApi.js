@@ -48,6 +48,10 @@ export function mapCatalogoDetalleToEnrollment(row) {
         : '',
     raza:
       row.raza != null && String(row.raza).trim() !== '' ? String(row.raza) : '',
+    grupo:
+      row.grupo_etiqueta != null && String(row.grupo_etiqueta).trim() !== ''
+        ? String(row.grupo_etiqueta)
+        : '',
     /** Copia de `c.numero` (API) para alinear con claves y fallback en tablas. */
     numero: row.numero,
     ordinal: ord,

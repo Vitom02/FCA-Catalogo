@@ -7,7 +7,9 @@ import {
   eliminarUsuario,
   listarCategoriasUsuarios,
   listarUsuarios,
+  obtenerUsuarioPorId,
 } from '../../apiConnect.jsx'
+import { BusquedaSelectTipo } from '../../componentes/comun/BusquedaSelectTipo.jsx'
 import { clubesSortedByName } from '../../utilidades/mapClubesApi.js'
 import '../catalogo/PaginaInicio.css'
 import './PaginaUsuarios.css'
@@ -45,6 +47,7 @@ function nombreCompletoFila(u) {
 function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit }) {
   const errId = useId()
   const [form, setForm] = useState(initial)
+  const [textoClub, setTextoClub] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(/** @type {string | null} */ (null))
 
@@ -53,8 +56,15 @@ function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit 
       setForm(initial)
       setErr(null)
       setSaving(false)
+      const id = String(initial.id_club ?? '').trim()
+      if (id) {
+        const c = clubes.find((x) => String(x.id_club) === id)
+        setTextoClub(c ? String(c.club) : '')
+      } else {
+        setTextoClub('')
+      }
     }
-  }, [open, initial])
+  }, [open, initial, clubes])
 
   if (!open) return null
 
@@ -137,31 +147,30 @@ function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit 
           <div className="admin-user-modal__field">
             <span className="admin-user-modal__label">Contraseña</span>
             <input
-              className="admin-user-modal__input"
-              type="password"
+              className={`admin-user-modal__input${isEdit ? ' admin-user-modal__input--clave-visible' : ''}`}
+              type={isEdit ? 'text' : 'password'}
               value={form.clave}
               onChange={(e) => setForm((f) => ({ ...f, clave: e.target.value }))}
-              autoComplete={isEdit ? 'new-password' : 'new-password'}
+              autoComplete={isEdit ? 'off' : 'new-password'}
               required={!isEdit}
             />
-            {isEdit ? (
-              <p className="admin-user-modal__hint">Dejá en blanco para no cambiar la clave.</p>
-            ) : null}
           </div>
           <div className="admin-user-modal__field">
             <span className="admin-user-modal__label">Club</span>
-            <select
-              className="admin-user-modal__select"
-              value={form.id_club}
-              onChange={(e) => setForm((f) => ({ ...f, id_club: e.target.value }))}
-            >
-              <option value="">Sin club asignado</option>
-              {clubes.map((c) => (
-                <option key={c.id_club} value={String(c.id_club)}>
-                  {c.club}
-                </option>
-              ))}
-            </select>
+            <BusquedaSelectTipo
+              items={clubes}
+              getId={(c) => /** @type {{ id_club: number }} */ (c).id_club}
+              getLabel={(c) => String(/** @type {{ club: string }} */ (c).club ?? '')}
+              valueId={form.id_club}
+              inputText={textoClub}
+              onValueIdChange={(id) => setForm((f) => ({ ...f, id_club: id }))}
+              onInputTextChange={setTextoClub}
+              aria-label="Club; escribir para buscar, Tab completa con la primera coincidencia"
+              placeholder="Buscar club; vaciar para sin club"
+              className="admin-user-modal__input"
+              scopeSelector=".admin-user-modal__form"
+              disabled={saving}
+            />
           </div>
           <div className="admin-user-modal__footer">
             <button
@@ -188,7 +197,7 @@ function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit 
 
 /**
  * @param {{
- *   session: { id_usuario: number, role: string },
+ *   session: { id_usuario: number, role: string, usuario?: string, username?: string },
  *   clubes: unknown,
  * }} props
  */
@@ -209,6 +218,10 @@ export function PaginaUsuarios({ session, clubes }) {
     clave: '',
     id_club: '',
   }))
+  /** Clave tal como vino del servidor al abrir edición (para no reenviarla si no cambió). */
+  const [claveOriginalEdicion, setClaveOriginalEdicion] = useState(
+    /** @type {string | null} */ (null),
+  )
 
   const clubesOpts = clubesSortedByName(clubes)
 
@@ -216,7 +229,7 @@ export function PaginaUsuarios({ session, clubes }) {
     setLoadState('loading')
     setLoadError(null)
     try {
-      const data = await listarUsuarios({ incluir_clave: true })
+      const data = await listarUsuarios({ incluir_clave: false })
       setRows(asUsuarioRows(data))
       setLoadState('ok')
     } catch (e) {
@@ -283,23 +296,41 @@ export function PaginaUsuarios({ session, clubes }) {
     setModal('add')
   }
 
-  function openEdit(u) {
+  async function openEdit(u) {
     const id = Number(u.id_usuario)
     if (!Number.isFinite(id)) return
-    setEditId(id)
-    setModalInitial({
-      nombre: String(u.nombre ?? ''),
-      apellido: String(u.apellido ?? ''),
-      usuario: String(u.usuario ?? ''),
-      clave: '',
-      id_club: u.id_club != null && u.id_club !== '' ? String(u.id_club) : '',
-    })
-    setModal('edit')
+    try {
+      const raw = await obtenerUsuarioPorId(id, { incluir_clave: true })
+      const row =
+        raw && typeof raw === 'object'
+          ? /** @type {Record<string, unknown>} */ (raw)
+          : u
+      const claveStr = String(row.clave ?? '')
+      setEditId(id)
+      setClaveOriginalEdicion(claveStr)
+      setModalInitial({
+        nombre: String(row.nombre ?? ''),
+        apellido: String(row.apellido ?? ''),
+        usuario: String(row.usuario ?? ''),
+        clave: claveStr,
+        id_club: row.id_club != null && row.id_club !== '' ? String(row.id_club) : '',
+      })
+      setModal('edit')
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'No se pudo cargar el usuario.'
+      window.alert(msg)
+    }
   }
 
   function closeModal() {
     setModal(null)
     setEditId(null)
+    setClaveOriginalEdicion(null)
   }
 
   /**
@@ -325,7 +356,9 @@ export function PaginaUsuarios({ session, clubes }) {
         usuario: f.usuario.trim(),
         id_club: idClub != null && Number.isFinite(idClub) ? idClub : null,
       }
-      if (f.clave.trim()) {
+      const orig = (claveOriginalEdicion ?? '').trim()
+      const nueva = f.clave.trim()
+      if (nueva !== '' && nueva !== orig) {
         body.clave = f.clave
       }
       await actualizarUsuario(editId, body)
@@ -339,8 +372,8 @@ export function PaginaUsuarios({ session, clubes }) {
   function handleEliminar(u) {
     const id = Number(u.id_usuario)
     if (!Number.isFinite(id)) return
-    if (id === session.id_usuario) {
-      window.alert('No podés eliminar tu propio usuario de administrador.')
+    if (Number.isFinite(Number(session.id_usuario)) && id === session.id_usuario) {
+      window.alert('No podés eliminar tu propio usuario.')
       return
     }
     const label = nombreCompletoFila(u)
@@ -414,14 +447,13 @@ export function PaginaUsuarios({ session, clubes }) {
                   <tr>
                     <th scope="col">Nombre</th>
                     <th scope="col">Usuario</th>
-                    <th scope="col">Clave</th>
                     <th scope="col">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="session-home__empty">
+                      <td colSpan={3} className="session-home__empty">
                         No hay usuarios para listar.
                       </td>
                     </tr>
@@ -429,17 +461,27 @@ export function PaginaUsuarios({ session, clubes }) {
                     rows.map((u) => {
                       const idC = Number(u.id_categoria)
                       const isAdmin = idC === ID_CATEGORIA_SUPERADMIN
+                      const idU = Number(u.id_usuario)
+                      const isSelf =
+                        Number.isFinite(Number(session.id_usuario)) &&
+                        Number.isFinite(idU) &&
+                        idU === session.id_usuario
                       return (
                         <tr key={String(u.id_usuario ?? '')}>
                           <td>{nombreCompletoFila(u)}</td>
                           <td>{String(u.usuario ?? '—')}</td>
                           <td>
-                            <span className="admin-usuarios__clave" title="Contraseña almacenada (texto plano)">
-                              {u.clave != null && String(u.clave) !== '' ? String(u.clave) : '—'}
-                            </span>
-                          </td>
-                          <td>
-                            {isAdmin ? (
+                            {isSelf ? (
+                              <div className="admin-usuarios__actions">
+                                <button
+                                  type="button"
+                                  className="session-home__btn session-home__btn--secondary admin-usuarios__btn--small"
+                                  onClick={() => void openEdit(u)}
+                                >
+                                  Editar
+                                </button>
+                              </div>
+                            ) : isAdmin ? (
                               <span className="admin-usuarios__hint" title="Cuenta de administrador">
                                 —
                               </span>
@@ -448,7 +490,7 @@ export function PaginaUsuarios({ session, clubes }) {
                                 <button
                                   type="button"
                                   className="session-home__btn session-home__btn--secondary admin-usuarios__btn--small"
-                                  onClick={() => openEdit(u)}
+                                  onClick={() => void openEdit(u)}
                                 >
                                   Editar
                                 </button>

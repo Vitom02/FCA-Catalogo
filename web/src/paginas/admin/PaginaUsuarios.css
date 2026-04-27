@@ -44,13 +44,9 @@
   font-size: 0.875rem;
 }
 
-.admin-usuarios__clave {
-  display: inline-block;
-  max-width: 12rem;
+.admin-user-modal__input--clave-visible {
   font-family: ui-monospace, monospace;
   font-size: 0.8125rem;
-  word-break: break-all;
-  color: var(--card-text);
 }
 
 .admin-usuarios__actions {

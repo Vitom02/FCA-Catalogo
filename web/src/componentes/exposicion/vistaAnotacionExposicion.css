@@ -108,6 +108,40 @@
   margin-left: auto;
 }
 
+.enrollment-modal__table-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.enrollment-modal__table-filters-label {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--card-text-muted);
+}
+
+.enrollment-modal__table-filters-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+
+.anotacion-page .enrollment-modal__table-filters .enrollment-modal__field {
+  flex: 1 1 140px;
+  min-width: 120px;
+  margin: 0;
+}
+
+.enrollment-modal__table-filters-clear {
+  flex-shrink: 0;
+}
+
 .enrollment-modal__filters {
   display: flex;
   flex-direction: column;
@@ -318,6 +352,62 @@
 .enrollment-modal__results {
   margin-top: 12px;
   min-height: 48px;
+}
+
+/* Tira bajo “Inscribir ejemplar”: caja baja, crece con el contenido hasta max-height y scroll */
+.anotacion-messages-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.anotacion-messages-strip .enrollment-modal__hint {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border, rgba(15, 39, 68, 0.12));
+  background: rgba(15, 39, 68, 0.04);
+  color: var(--card-text-muted);
+  max-height: 5.25rem;
+  overflow-y: auto;
+}
+
+.anotacion-messages-strip .enrollment-modal__hint--error {
+  color: #b91c1c;
+  background: rgba(185, 28, 28, 0.06);
+  border-color: rgba(185, 28, 28, 0.28);
+}
+
+.anotacion-messages-strip code {
+  font-size: 0.62rem;
+  word-break: break-all;
+}
+
+.anotacion-page .enrollment-modal__results {
+  margin-top: 8px;
+  min-height: 0;
+}
+
+.anotacion-page .enrollment-modal__results > .enrollment-modal__hint {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border, rgba(15, 39, 68, 0.12));
+  background: rgba(15, 39, 68, 0.04);
+  color: var(--card-text-muted);
+  max-height: 5.25rem;
+  overflow-y: auto;
+}
+
+.anotacion-page .enrollment-modal__results > .enrollment-modal__hint--error {
+  color: #b91c1c;
+  background: rgba(185, 28, 28, 0.06);
+  border-color: rgba(185, 28, 28, 0.28);
 }
 
 .enrollment-modal__hint {
