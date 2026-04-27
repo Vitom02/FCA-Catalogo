@@ -4,7 +4,9 @@ FROM node:20-bookworm-slim AS build
 WORKDIR /web
 
 COPY web/package.json web/package-lock.json* ./
-RUN npm ci
+# `npm ci` falla si lock y package.json no coinciden al 100 % (común al mezclar OS/npm).
+# `npm install` respeta el lock cuando es válido y completa lo que falta en el build.
+RUN npm install --no-audit --no-fund
 
 COPY web/ ./
 
