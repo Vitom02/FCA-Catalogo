@@ -64,9 +64,9 @@
   color: var(--card-text-muted);
 }
 
-/* + contraído / - expandido, a la derecha del número */
-.resumen-catalogo__summary-raiz::after,
-.resumen-catalogo__nodo > summary.resumen-catalogo__pildora::after {
+/* + contraído / - expandido, a la izquierda antes del texto */
+.resumen-catalogo__summary-raiz::before,
+.resumen-catalogo__nodo > summary.resumen-catalogo__pildora::before {
   content: '+';
   flex-shrink: 0;
   width: 0.85em;
@@ -77,8 +77,8 @@
   color: var(--card-text-muted);
 }
 
-.resumen-catalogo__raiz[open] > .resumen-catalogo__summary-raiz::after,
-.resumen-catalogo__nodo[open] > summary.resumen-catalogo__pildora::after {
+.resumen-catalogo__raiz[open] > .resumen-catalogo__summary-raiz::before,
+.resumen-catalogo__nodo[open] > summary.resumen-catalogo__pildora::before {
   content: '-';
 }
 
