@@ -25,19 +25,32 @@ function formatTimestamp(value) {
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
 }
 
+/** Fecha calendario (solo día) para JSON estable; evita corrimientos en date-only. */
+function formatDateOnly(value) {
+  if (value == null || value === "") return value;
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(value.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(value).trim();
+  if (!s) return null;
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
     ...row,
     fecha_insc: formatTimestamp(row.fecha_insc),
+    fecha_nacimiento: formatDateOnly(row.fecha_nacimiento),
   };
 }
 
 /**
- * @param {{ id_exposicion?: number | string | null }} [filtros]
- */
-/**
- * Inscripciones de una exposición con datos para la grilla (ejemplar, categoría, usuario).
+ * Detalle de inscriptos (grilla + PDF). Un solo parámetro: `id_exposicion`.
+ * Misma base que el listado formal: expo, club, categoría, ejemplar, raza, N/I, propietarios, etc.
  */
 export async function listarPorExposicionDetalle(idExposicion) {
   const n = Number(idExposicion);
@@ -57,6 +70,10 @@ export async function listarPorExposicionDetalle(idExposicion) {
        c.numero,
        c.id_usuario,
        c.fecha_insc,
+       x.exposicion AS exposicion_descripcion,
+       x.desde AS exposicion_desde,
+       x.hasta AS exposicion_hasta,
+       cu.club AS exposicion_club,
        ec.categoria AS categoria_etiqueta,
        u.usuario AS usuario_login,
        web.ejemplar_nombre(e.nombre, e.prefijo, e.sufijo) AS nombre_completo,
@@ -70,12 +87,12 @@ export async function listarPorExposicionDetalle(idExposicion) {
          NULLIF(TRIM(COALESCE(fp.codigo_pais, f.codigo_pais, fo.codigo_pais, e.codigo_pais)), ''),
          NULLIF(TRIM(COALESCE(fp.federacion, f.federacion, fo.federacion)), '')
        ) AS codigo_pais,
-       CONCAT_WS(
-         ' - ',
-         NULLIF(TRIM(COALESCE(r.codigo_raza, e.codigo_raza)), ''),
-         NULLIF(TRIM(r.raza), '')
-       ) AS raza,
+       COALESCE(f.codigo_pais, fo.codigo_pais, e.codigo_pais) AS codigo_pais_federacion,
+       CASE WHEN e.id_federacion IS NULL THEN 'I' ELSE 'N' END AS nacional_importado,
+       NULLIF(TRIM(r.raza), '') AS raza,
+       NULLIF(TRIM(COALESCE(r.codigo_raza, e.codigo_raza)), '') AS codigo_raza,
        COALESCE(r.id_grupo, 0)::int AS id_grupo,
+       COALESCE(e.id_raza, 0)::int AS id_raza,
        CASE
          WHEN COALESCE(r.id_grupo, 0) = 0 THEN 'Sin grupo'
          ELSE COALESCE(
@@ -83,18 +100,46 @@ export async function listarPorExposicionDetalle(idExposicion) {
            'Grupo ' || r.id_grupo::text
          )
        END AS grupo_etiqueta,
-       COALESCE(e.registro::VARCHAR, e.registro_origen::VARCHAR) AS registro
+       COALESCE(e.registro::VARCHAR, e.registro_origen::VARCHAR) AS registro,
+       NULLIF(TRIM(COALESCE(e.microchip, '')), '') AS microchip,
+       NULLIF(TRIM(COALESCE(r.funcion, '')), '') AS raza_funcion,
+       NULLIF(TRIM(COALESCE(r.descripcion, '')), '') AS raza_descripcion,
+       e.fecha_nacimiento,
+       NULLIF(
+         TRIM(COALESCE(web.ejemplar_nombre(ep.nombre, ep.prefijo, ep.sufijo), '')),
+         ''
+       ) AS nombre_padre,
+       NULLIF(
+         TRIM(COALESCE(web.ejemplar_nombre(em.nombre, em.prefijo, em.sufijo), '')),
+         ''
+       ) AS nombre_madre,
+       NULLIF(TRIM((
+         SELECT STRING_AGG(
+           TRIM(CONCAT_WS(' ', p.nombre::text, p.apellido::text)),
+           ', '
+           ORDER BY p.apellido, p.nombre, p.id_propietario
+         )
+         FROM web.propiedades_ejemplares pe
+         JOIN web.propiedades_propietarios pp ON pp.id_propiedad = pe.id_propiedad
+         JOIN web.propietarios p ON p.id_propietario = pp.id_propietario
+         WHERE pe.hasta IS NULL
+           AND pe.id_ejemplar = e.id_ejemplar
+       )), '') AS propietario
      FROM ${TABLE} c
-     LEFT JOIN web.ejemplares e ON e.id_ejemplar = c.id_ejemplar
-     LEFT JOIN web.razas r ON r.id_raza = e.id_raza
+     JOIN web.exposiciones x ON x.id_exposicion = c.id_exposicion
+     LEFT JOIN web.clubes cu ON cu.id_club = x.id_club
+     JOIN ${T_EC} ec ON ec.id_categoria = c.id_categoria
+     JOIN web.ejemplares e ON e.id_ejemplar = c.id_ejemplar
+     JOIN web.razas r ON r.id_raza = e.id_raza
+     LEFT JOIN web.ejemplares ep ON ep.id_ejemplar = e.id_ejemplar_padre
+     LEFT JOIN web.ejemplares em ON em.id_ejemplar = e.id_ejemplar_madre
      LEFT JOIN web.razas_grupos rg ON rg.id_grupo = r.id_grupo
      LEFT JOIN web.federaciones f ON f.id_federacion = e.id_federacion
      LEFT JOIN web.federaciones fo ON fo.id_federacion = e.id_federacion_origen
      LEFT JOIN web.federaciones fp ON fp.codigo_pais = COALESCE(f.codigo_pais, fo.codigo_pais, e.codigo_pais)
-     LEFT JOIN ${T_EC} ec ON ec.id_categoria = c.id_categoria
      LEFT JOIN ${T_U} u ON u.id_usuario = c.id_usuario
      WHERE c.id_exposicion = $1
-     ORDER BY c.id_catalogo ASC`,
+     ORDER BY r.id_grupo, r.raza, e.sexo, c.id_categoria, e.fecha_nacimiento NULLS LAST, c.id_catalogo`,
     [n]
   );
   return r.rows.map(mapRow);
@@ -133,7 +178,6 @@ export async function resumenAgrupadoPorExposicion(idExposicion) {
           )
         END AS etiqueta_grupo,
         COALESCE(
-          NULLIF(TRIM(r.codigo_raza), ''),
           NULLIF(TRIM(r.raza), ''),
           'Raza ' || COALESCE(e.id_raza, 0)::text
         ) AS etiqueta_raza,

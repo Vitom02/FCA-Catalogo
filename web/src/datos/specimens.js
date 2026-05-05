@@ -224,3 +224,6 @@ export const ENROLLMENT_TABLE_COLUMNS = [
   'numero',
   'usuario',
 ]
+
+/** Columnas con valor numérico de catálogo (alineación derecha). */
+export const ENROLLMENT_NUMERIC_COLUMNS = Object.freeze(new Set(['numero']))

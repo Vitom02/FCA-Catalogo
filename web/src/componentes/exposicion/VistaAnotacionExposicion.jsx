@@ -2,12 +2,17 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   ApiError,
   buscarEjemplares,
+  listarCatalogosPorExposicionDetalle,
   listarCategoriasEjemplares,
   listarFederacionesEjemplares,
   listarRazasEjemplares,
   obtenerEjemplarPorId,
 } from '../../apiConnect.jsx'
-import { ENROLLMENT_TABLE_COLUMNS } from '../../datos/specimens.js'
+import { esExposicionEstadoAbierto } from '../../datos/exhibitionsTable.js'
+import {
+  ENROLLMENT_NUMERIC_COLUMNS,
+  ENROLLMENT_TABLE_COLUMNS,
+} from '../../datos/specimens.js'
 import { formatExhibitionDateRange, formatTableDate } from '../../utilidades/dateDisplay.js'
 import {
   etiquetaInscripcionCategoria,
@@ -143,6 +148,7 @@ export function VistaAnotacionExposicion({
   const tarjetaEjemplarTitleId = useId()
   const editCategoriaTitleId = useId()
   const editCategoriaErrorId = useId()
+  const eliminarEjemplarTitleId = useId()
   const [idFederacion, setIdFederacion] = useState('')
   const [idRaza, setIdRaza] = useState('')
   const [textoBusqFederacion, setTextoBusqFederacion] = useState('')
@@ -178,6 +184,10 @@ export function VistaAnotacionExposicion({
     /** @type {string | null} */ (null),
   )
   const [editCategoriaCargando, setEditCategoriaCargando] = useState(false)
+  const [eliminarEjemplarIndex, setEliminarEjemplarIndex] = useState(
+    /** @type {number | null} */ (null),
+  )
+  const [pdfPreparando, setPdfPreparando] = useState(false)
 
   const [filtroTablaRaza, setFiltroTablaRaza] = useState('')
   const [textoFiltroTablaRaza, setTextoFiltroTablaRaza] = useState('')
@@ -730,9 +740,19 @@ export function VistaAnotacionExposicion({
     cerrarEdicionCategoria()
   }
 
-  function handleEliminar(i) {
-    const ok = window.confirm('¿Quitar este ejemplar de la anotación?')
-    if (!ok) return
+  function abrirConfirmarEliminar(i) {
+    if (enrollments[i] == null) return
+    setEliminarEjemplarIndex(i)
+  }
+
+  function cerrarConfirmarEliminar() {
+    setEliminarEjemplarIndex(null)
+  }
+
+  function confirmarEliminarEjemplar() {
+    if (eliminarEjemplarIndex == null) return
+    const i = eliminarEjemplarIndex
+    setEliminarEjemplarIndex(null)
     cerrarEdicionCategoria()
     onRemoveEnrollment(i)
   }
@@ -760,6 +780,47 @@ export function VistaAnotacionExposicion({
       .catch(() => {
         window.alert('No se pudo cargar la exportación a Excel. Reintentá o actualizá la página.')
       })
+  }
+
+  async function handleVistaPreviaCatalogoPdf() {
+    if (
+      catalogosCargando ||
+      catalogosError != null ||
+      enrollments.length === 0 ||
+      idExposicion == null
+    ) {
+      return
+    }
+    setPdfPreparando(true)
+    try {
+      const data = await listarCatalogosPorExposicionDetalle(idExposicion)
+      const filas = Array.isArray(data) ? data : []
+      if (filas.length === 0) {
+        window.alert('No hay inscriptos en el catálogo para generar el PDF.')
+        return
+      }
+      const { buildDocumentoHtmlCatalogoDesdeFilasDetalle, abrirVistaPreviaCatalogoPdf } =
+        await import('../../utilidades/exportCatalogoPdf.js')
+      const nro = String(exhibition['Número'] ?? '').trim()
+      const desc = String(exhibition['Descripción'] ?? '').trim() || 'Exposición'
+      const tituloDocumento =
+        nro !== '' ? `Catalogo Exposición ${nro} — ${desc}` : `Catalogo — ${desc}`
+      const html = buildDocumentoHtmlCatalogoDesdeFilasDetalle(filas, {
+        tituloDocumento,
+        incluirPrefijoNumeroCatalogoEjemplar: !esExposicionEstadoAbierto(exhibition),
+      })
+      abrirVistaPreviaCatalogoPdf(html)
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'No se pudo generar la vista previa del catálogo. Reintentá o actualizá la página.'
+      window.alert(msg)
+    } finally {
+      setPdfPreparando(false)
+    }
   }
 
   function renderTarjetaEjemplarOverlay() {
@@ -1022,6 +1083,59 @@ export function VistaAnotacionExposicion({
               Guardar
             </button>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  function renderEliminarEjemplarModal() {
+    if (eliminarEjemplarIndex == null) return null
+    const fila = enrollments[eliminarEjemplarIndex]
+    if (!fila) return null
+    return (
+      <div
+        className="anotacion-eliminar-overlay"
+        role="presentation"
+        onClick={cerrarConfirmarEliminar}
+      >
+        <div
+          className="anotacion-tarjeta-dialog anotacion-eliminar-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={eliminarEjemplarTitleId}
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <header className="anotacion-tarjeta-dialog__header">
+            <p id={eliminarEjemplarTitleId} className="anotacion-eliminar-dialog__prompt">
+              ¿Desea dar de baja este ejemplar?
+            </p>
+          </header>
+          <div className="anotacion-tarjeta-card">
+            <dl className="anotacion-tarjeta-card__dl">
+              {ENROLLMENT_TABLE_COLUMNS.map((col) => (
+                <div key={col} className="anotacion-tarjeta-card__row">
+                  <dt>{COLUMN_LABELS[col] ?? col}</dt>
+                  <dd>{textoCeldaInscripcion(fila[col])}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <footer className="anotacion-tarjeta-dialog__footer">
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--secondary"
+              onClick={cerrarConfirmarEliminar}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--primary"
+              onClick={confirmarEliminarEjemplar}
+            >
+              Dar de baja
+            </button>
+          </footer>
         </div>
       </div>
     )
@@ -1309,7 +1423,9 @@ export function VistaAnotacionExposicion({
                     <th scope="col">Nombre</th>
                     <th scope="col">Federación</th>
                     <th scope="col">Raza</th>
-                    <th scope="col">Registro</th>
+                    <th scope="col" className="session-home__cell--numeric">
+                      Registro
+                    </th>
                     <th scope="col">Sexo</th>
                   </tr>
                 </thead>
@@ -1374,7 +1490,7 @@ export function VistaAnotacionExposicion({
                           <td>{nom}</td>
                           <td>{String(row.codigo_pais ?? '—')}</td>
                           <td>{String(row.raza ?? '—')}</td>
-                          <td>
+                          <td className="session-home__cell--numeric">
                             {row.registro != null && row.registro !== ''
                               ? String(row.registro)
                               : '—'}
@@ -1394,19 +1510,37 @@ export function VistaAnotacionExposicion({
 
       {renderTarjetaEjemplarOverlay()}
       {renderEdicionCategoriaModal()}
+      {renderEliminarEjemplarModal()}
 
       <section className="enrollment-modal__section enrollment-modal__section--table">
         <div className="enrollment-modal__section-head--table">
           <h3 className="enrollment-modal__section-title">Ejemplares anotados</h3>
-          <button
-            type="button"
-            className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact"
-            onClick={handleExportarCatalogoExcel}
-            disabled={catalogosCargando || catalogosError != null || enrollments.length === 0}
-            title="Descargar catálogo en Excel"
-          >
-            Exportar a Excel
-          </button>
+          <div className="enrollment-modal__section-actions">
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact"
+              onClick={() => void handleVistaPreviaCatalogoPdf()}
+              disabled={
+                catalogosCargando ||
+                pdfPreparando ||
+                catalogosError != null ||
+                enrollments.length === 0 ||
+                idExposicion == null
+              }
+              title="Abrir el catálogo en una pestaña nueva para imprimir o guardar como PDF"
+            >
+              {pdfPreparando ? 'Generando PDF…' : 'Vista previa PDF'}
+            </button>
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact"
+              onClick={handleExportarCatalogoExcel}
+              disabled={catalogosCargando || catalogosError != null || enrollments.length === 0}
+              title="Descargar catálogo en Excel"
+            >
+              Exportar a Excel
+            </button>
+          </div>
         </div>
         <div
           className="enrollment-modal__table-filters anotacion-tabla-filtros"
@@ -1481,7 +1615,15 @@ export function VistaAnotacionExposicion({
             <thead>
               <tr>
                 {ENROLLMENT_TABLE_COLUMNS.map((col) => (
-                  <th key={col} scope="col">
+                  <th
+                    key={col}
+                    scope="col"
+                    className={
+                      ENROLLMENT_NUMERIC_COLUMNS.has(col)
+                        ? 'session-home__cell--numeric'
+                        : undefined
+                    }
+                  >
                     {COLUMN_LABELS[col] ?? col}
                   </th>
                 ))}
@@ -1528,7 +1670,14 @@ export function VistaAnotacionExposicion({
                   return (
                     <tr key={`${rk}-${i}`}>
                       {ENROLLMENT_TABLE_COLUMNS.map((col) => (
-                        <td key={col}>
+                        <td
+                          key={col}
+                          className={
+                            ENROLLMENT_NUMERIC_COLUMNS.has(col)
+                              ? 'session-home__cell--numeric'
+                              : undefined
+                          }
+                        >
                           {col === 'numero'
                             ? ''
                             : textoCeldaInscripcion(row[col])}
@@ -1548,9 +1697,9 @@ export function VistaAnotacionExposicion({
                           <button
                             type="button"
                             className="enrollment-modal__icon-btn enrollment-modal__icon-btn--delete"
-                            title="Eliminar"
-                            aria-label="Eliminar de la anotación"
-                            onClick={() => handleEliminar(i)}
+                            title="Dar de baja"
+                            aria-label="Dar de baja del catálogo"
+                            onClick={() => abrirConfirmarEliminar(i)}
                           >
                             <IconTrash />
                           </button>

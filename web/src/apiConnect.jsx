@@ -64,6 +64,7 @@ async function request(method, path, opts = {}) {
   /** @type {RequestInit} */
   const init = {
     method,
+    cache: 'no-store',
     headers: { Accept: 'application/json' },
   }
   if (body !== undefined && method !== 'GET' && method !== 'DELETE') {
@@ -112,6 +113,11 @@ export function listarExposiciones() {
 /** Solo exposiciones con fecha de inicio ≥ hoy. */
 export function listarExposicionesProximas() {
   return request('GET', '/api/exposiciones/proximas')
+}
+
+/** Filas de `web.exposiciones_estados` (id_estado, estado). */
+export function listarExposicionesEstados() {
+  return request('GET', '/api/exposiciones/estados')
 }
 
 /** Filtra por `id_club`. */

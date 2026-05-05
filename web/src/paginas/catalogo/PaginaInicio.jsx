@@ -12,8 +12,9 @@ import {
   listarExposicionesProximas,
 } from '../../apiConnect.jsx'
 import {
+  EXHIBITION_NUMERIC_COLUMNS,
   EXHIBITION_TABLE_COLUMNS,
-  exhibitionInCalendarYear,
+  esExposicionEstadoAbierto,
   filterExhibitionsByCatalogCriteria,
   filterExhibitionsByKennelId,
   filterExhibitionsByRole,
@@ -75,13 +76,19 @@ const MONTH_OPTIONS = [
   { value: '12', label: 'Diciembre' },
 ]
 
+/** Año y mes calendario actuales (local), para filtros por defecto. */
+function defaultAnoYMesEnCurso() {
+  const d = new Date()
+  return {
+    ano: String(d.getFullYear()),
+    mes: String(d.getMonth() + 1).padStart(2, '0'),
+  }
+}
+
 const emptyFilters = () => ({
   numero: '',
-  descripcion: '',
-  ano: '',
-  mes: '',
+  ...defaultAnoYMesEnCurso(),
   kennelId: '',
-  exposicionKey: '',
 })
 
 /** Clave interna para filas sin `club` en el JSON (null o vacío). */
@@ -183,14 +190,18 @@ export function PaginaInicio({
         listarCatalogosConteosPorExposicion().catch(() => []),
       ])
       const base = mapListaExposicionesApi(data)
-      setExhibitionRows(mapConteosCantidadEnFilas(base, conteos))
+      let merged = mapConteosCantidadEnFilas(base, conteos)
+      if (session.role !== 'superadmin') {
+        merged = merged.filter((r) => esExposicionEstadoAbierto(r))
+      }
+      setExhibitionRows(merged)
       setExpoLoad({ status: 'ok', error: null })
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : 'No se pudieron cargar las exposiciones.'
       setExpoLoad({ status: 'error', error: msg })
     }
-  }, [setExhibitionRows])
+  }, [setExhibitionRows, session.role])
 
   useEffect(() => {
     cargarExposicionesProximas()
@@ -234,39 +245,13 @@ export function PaginaInicio({
     return filterExhibitionsByKennelId(rowsForRole, applied.kennelId)
   }, [session.role, rowsForRole, applied.kennelId])
 
-  const expoPickEnabled = useMemo(
-    () =>
-      isSuperadmin &&
-      (applied.ano ?? '').trim().length > 0 &&
-      Boolean(applied.kennelId),
-    [isSuperadmin, applied.ano, applied.kennelId],
-  )
-
-  const exposicionesEnPeriodo = useMemo(() => {
-    if (!expoPickEnabled) return []
-    const a = (applied.ano ?? '').trim()
-    return rowsAfterKennel
-      .filter((row) => exhibitionInCalendarYear(row, a))
-      .slice()
-      .sort((x, y) =>
-        String(x['Fecha inicio'] ?? '').localeCompare(
-          String(y['Fecha inicio'] ?? ''),
-        ),
-      )
-  }, [expoPickEnabled, applied.ano, rowsAfterKennel])
-
   const displayedRows = useMemo(() => {
-    let r = filterExhibitionsByCatalogCriteria(rowsAfterKennel, {
+    return filterExhibitionsByCatalogCriteria(rowsAfterKennel, {
       numero: applied.numero,
-      descripcion: applied.descripcion,
       ano: applied.ano,
       mes: applied.mes,
     })
-    if (expoPickEnabled && applied.exposicionKey) {
-      r = r.filter((row) => getExhibitionRowKey(row) === applied.exposicionKey)
-    }
-    return r
-  }, [rowsAfterKennel, applied, expoPickEnabled])
+  }, [rowsAfterKennel, applied.numero, applied.ano, applied.mes])
 
   const displayedRowsPorClub = useMemo(() => {
     if (!isSuperadmin) return null
@@ -295,18 +280,7 @@ export function PaginaInicio({
 
   function handleBuscar(e) {
     e.preventDefault()
-    const next = { ...draft }
-    if (!(next.ano ?? '').trim() || !next.kennelId) {
-      next.exposicionKey = ''
-    }
-    setDraft(next)
-    setApplied(next)
-  }
-
-  function handleExposicionPick(e) {
-    const v = e.target.value
-    setDraft((d) => ({ ...d, exposicionKey: v }))
-    setApplied((a) => ({ ...a, exposicionKey: v }))
+    setApplied({ ...draft })
   }
 
   function handleActualizar() {
@@ -408,19 +382,6 @@ export function PaginaInicio({
                 />
               </label>
               <label className="session-home__field">
-                <span className="session-home__field-label">Descripción</span>
-                <input
-                  type="text"
-                  className="session-home__input"
-                  value={draft.descripcion}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, descripcion: e.target.value }))
-                  }
-                  placeholder="Nombre de la exposición"
-                  autoComplete="off"
-                />
-              </label>
-              <label className="session-home__field">
                 <span className="session-home__field-label">Año</span>
                 <input
                   type="text"
@@ -428,8 +389,8 @@ export function PaginaInicio({
                   value={draft.ano}
                   onChange={(e) => {
                     const ano = e.target.value
-                    setDraft((d) => ({ ...d, ano, exposicionKey: '' }))
-                    setApplied((a) => ({ ...a, exposicionKey: '' }))
+                    setDraft((d) => ({ ...d, ano }))
+                    setApplied((a) => ({ ...a, ano }))
                   }}
                   placeholder="Ej. 2026"
                   autoComplete="off"
@@ -444,8 +405,8 @@ export function PaginaInicio({
                   value={draft.mes}
                   onChange={(e) => {
                     const mes = e.target.value
-                    setDraft((d) => ({ ...d, mes, exposicionKey: '' }))
-                    setApplied((a) => ({ ...a, exposicionKey: '' }))
+                    setDraft((d) => ({ ...d, mes }))
+                    setApplied((a) => ({ ...a, mes }))
                   }}
                 >
                   {MONTH_OPTIONS.map((opt) => (
@@ -460,50 +421,24 @@ export function PaginaInicio({
               </label>
               {isSuperadmin ? (
                 <label className="session-home__field">
-                  <span className="session-home__field-label">Kennel</span>
+                  <span className="session-home__field-label">
+                    Kennel o club
+                  </span>
                   <select
                     className="session-home__select"
                     value={draft.kennelId}
                     onChange={(e) => {
                       const kennelId = e.target.value
-                      setDraft((d) => ({ ...d, kennelId, exposicionKey: '' }))
-                      setApplied((a) => ({ ...a, exposicionKey: '' }))
+                      setDraft((d) => ({ ...d, kennelId }))
+                      setApplied((a) => ({ ...a, kennelId }))
                     }}
                   >
-                    <option value="">Todas las perreras</option>
+                    <option value="">Todas</option>
                     {kennelIdsInData.map((id) => (
                       <option key={id} value={id}>
                         {kennelLabels[id] ?? id}
                       </option>
                     ))}
-                  </select>
-                </label>
-              ) : null}
-              {isSuperadmin ? (
-                <label className="session-home__field session-home__field--expo-pick">
-                  <span className="session-home__field-label">Exposición</span>
-                  <select
-                    className="session-home__select"
-                    disabled={!expoPickEnabled}
-                    value={expoPickEnabled ? applied.exposicionKey : ''}
-                    onChange={handleExposicionPick}
-                    aria-label="Filtrar por una exposición del año y club"
-                  >
-                    <option value="">
-                      {expoPickEnabled
-                        ? 'Todas las exposiciones del año y club'
-                        : 'Indica año y club · Buscar'}
-                    </option>
-                    {exposicionesEnPeriodo.map((row) => {
-                      const key = getExhibitionRowKey(row)
-                      const kn = kennelLabels[row.kennelId] ?? row.kennelId ?? ''
-                      const label = `N.º ${row['Número'] ?? '—'} · ${row['Descripción'] ?? '—'} (${kn})`
-                      return (
-                        <option key={key} value={key}>
-                          {label}
-                        </option>
-                      )
-                    })}
                   </select>
                 </label>
               ) : null}
@@ -559,7 +494,15 @@ export function PaginaInicio({
               <thead>
                 <tr>
                   {visibleExhibitionColumns.map((col) => (
-                    <th key={col} scope="col">
+                    <th
+                      key={col}
+                      scope="col"
+                      className={
+                        EXHIBITION_NUMERIC_COLUMNS.has(col)
+                          ? 'session-home__cell--numeric'
+                          : undefined
+                      }
+                    >
                       {col}
                     </th>
                   ))}
@@ -653,7 +596,14 @@ export function PaginaInicio({
                           }}
                         >
                           {visibleExhibitionColumns.map((col) => (
-                            <td key={col}>
+                            <td
+                              key={col}
+                              className={
+                                EXHIBITION_NUMERIC_COLUMNS.has(col)
+                                  ? 'session-home__cell--numeric'
+                                  : undefined
+                              }
+                            >
                               {formatExhibitionColumnValue(col, row[col])}
                             </td>
                           ))}
@@ -707,7 +657,14 @@ export function PaginaInicio({
                       }}
                     >
                       {visibleExhibitionColumns.map((col) => (
-                        <td key={col}>
+                        <td
+                          key={col}
+                          className={
+                            EXHIBITION_NUMERIC_COLUMNS.has(col)
+                              ? 'session-home__cell--numeric'
+                              : undefined
+                          }
+                        >
                           {formatExhibitionColumnValue(col, row[col])}
                         </td>
                       ))}

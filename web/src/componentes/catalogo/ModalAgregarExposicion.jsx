@@ -19,7 +19,7 @@ function emptyForm() {
     cantidad: '',
     extraRazas: '',
     extraCachorros: '',
-    abierto: true,
+    modoCierre: /** @type {'auto' | 'manual'} */ ('auto'),
   }
 }
 
@@ -35,6 +35,12 @@ function rowToForm(row) {
   const cupo = /** @type {{ cupo_limite?: number | null }} */ (row).cupo_limite
   const er = /** @type {{ numeros_extra_razas?: number | null }} */ (row).numeros_extra_razas
   const ec = /** @type {{ numeros_extra_cachorros?: number | null }} */ (row).numeros_extra_cachorros
+
+  const modoCierre =
+    /** @type {{ cerrado_manual?: boolean }} */ (row).cerrado_manual === true
+      ? 'manual'
+      : 'auto'
+
   return {
     nombre: String(row['Descripción'] ?? '').trim(),
     fechaInicio: String(row['Fecha inicio'] ?? '').trim(),
@@ -44,7 +50,7 @@ function rowToForm(row) {
       cupo != null && Number.isFinite(Number(cupo)) ? String(cupo) : '',
     extraRazas: er != null && Number.isFinite(Number(er)) ? String(er) : '',
     extraCachorros: ec != null && Number.isFinite(Number(ec)) ? String(ec) : '',
-    abierto: String(row.Estado ?? '').trim() === 'Abierto',
+    modoCierre,
   }
 }
 
@@ -57,8 +63,9 @@ function toOptIntStr(s) {
 
 /**
  * @param {typeof emptyForm()} form
+ * @param {{ esEdicion?: boolean }} [opts]
  */
-function buildApiBody(form) {
+function buildApiBody(form, opts = {}) {
   const nombre = form.nombre.trim()
   const idClub = Number.parseInt(String(form.kennelId ?? '').trim(), 10)
   if (!Number.isFinite(idClub) || idClub < 1) {
@@ -70,7 +77,8 @@ function buildApiBody(form) {
   if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
     throw new Error('Fecha de inicio inválida.')
   }
-  return {
+  /** @type {Record<string, unknown>} */
+  const body = {
     exposicion: nombre,
     desde: form.fechaInicio,
     hasta: form.fechaFin,
@@ -82,6 +90,10 @@ function buildApiBody(form) {
     numeros_extra_razas: toOptIntStr(form.extraRazas),
     numeros_extra_cachorros: toOptIntStr(form.extraCachorros),
   }
+  if (opts.esEdicion) {
+    body.cerrado_manual = form.modoCierre === 'manual'
+  }
+  return body
 }
 
 function parseNumInput(v) {
@@ -273,7 +285,7 @@ export function ModalAgregarExposicion({
 
     let apiBody
     try {
-      apiBody = buildApiBody(form)
+      apiBody = buildApiBody(form, { esEdicion: idExposicionEdicion != null })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Datos inválidos.')
       return
@@ -489,17 +501,28 @@ export function ModalAgregarExposicion({
             </label>
           </div>
 
-          <label className="expo-add-modal__check expo-add-modal__check--compact">
-            <input
-              type="checkbox"
-              checked={form.abierto}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, abierto: e.target.checked }))
-              }
-              disabled={guardando}
-            />
-            <span>Abierto</span>
-          </label>
+          {idExposicionEdicion != null ? (
+            <label className="expo-add-modal__field expo-add-modal__field--compact">
+              <span className="expo-add-modal__label">Inscripciones / estado</span>
+              <select
+                className="expo-add-modal__select expo-add-modal__input--compact"
+                value={form.modoCierre}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    modoCierre:
+                      e.target.value === 'manual' ? 'manual' : 'auto',
+                  }))
+                }
+                disabled={guardando}
+              >
+                <option value="auto">Automático (reglas y fechas)</option>
+                <option value="manual">
+                  Cerrado manual (abre la siguiente del club si hay)
+                </option>
+              </select>
+            </label>
+          ) : null}
 
           <div className="expo-add-modal__actions expo-add-modal__actions--compact">
             <button

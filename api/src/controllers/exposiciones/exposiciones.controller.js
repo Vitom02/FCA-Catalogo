@@ -11,6 +11,14 @@ const CAMPOS_ENTEROS_OPCIONALES_EXPO = [
   "numeros_extra_cachorros",
 ];
 
+/** Si viene `cerrado_manual`, debe ser booleano (cierre manual en edición). */
+function validarCerradoManualEnPayload(b) {
+  if (!Object.prototype.hasOwnProperty.call(b ?? {}, "cerrado_manual")) return null;
+  const v = b.cerrado_manual;
+  if (v === true || v === false) return null;
+  return "cerrado_manual debe ser true o false";
+}
+
 function validarEnterosOpcionalesExpo(b) {
   for (const k of CAMPOS_ENTEROS_OPCIONALES_EXPO) {
     const v = b[k];
@@ -54,6 +62,16 @@ function validarCrear(body) {
   }
 
   return validarEnterosOpcionalesExpo(b);
+}
+
+export async function listarEstados(_req, res) {
+  try {
+    const rows = await exposicionesService.listarEstados();
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 }
 
 export async function listar(_req, res) {
@@ -143,6 +161,11 @@ export async function actualizar(req, res) {
       return;
     }
     const b = req.body ?? {};
+    const msgCm = validarCerradoManualEnPayload(b);
+    if (msgCm) {
+      res.status(400).json({ error: msgCm });
+      return;
+    }
     const msgInt = validarEnterosOpcionalesExpo(b);
     if (msgInt) {
       res.status(400).json({ error: msgInt });
@@ -152,6 +175,10 @@ export async function actualizar(req, res) {
     res.json(row);
   } catch (err) {
     if (err && err.code === "EXPO_ID_CLUB_INVALIDO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err && err.code === "EXPO_CERRADO_MANUAL_INVALIDO") {
       res.status(400).json({ error: err.message });
       return;
     }

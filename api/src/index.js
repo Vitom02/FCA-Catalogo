@@ -25,6 +25,7 @@ app.get("/api/clubes", clubesController.listar);
 
 app.get("/api/exposiciones/proximas", exposicionesController.listarProximas);
 app.get("/api/exposiciones/club/:idClub", exposicionesController.listarPorClub);
+app.get("/api/exposiciones/estados", exposicionesController.listarEstados);
 app.get("/api/exposiciones", exposicionesController.listar);
 app.get("/api/exposiciones/:id", exposicionesController.obtenerPorId);
 app.post("/api/exposiciones", exposicionesController.crear);

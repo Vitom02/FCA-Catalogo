@@ -1,5 +1,10 @@
 import { query } from "../../database/index.js";
 
+/** Coinciden con web.exposiciones_estados (migración). */
+const ID_ESTADO_ABIERTO = 1;
+const ID_ESTADO_CERRADO = 2;
+const ID_ESTADO_FINALIZADO = 3;
+
 const COLUMNS = [
   "exposicion",
   "desde",
@@ -8,6 +13,7 @@ const COLUMNS = [
   "id_tipo",
   "ano",
   "id_mes",
+  "id_estado",
   "organizador",
   "texto1",
   "texto2",
@@ -53,6 +59,8 @@ const SELECT_BASE = `
     e.id_tipo,
     e.ano,
     e.id_mes,
+    e.id_estado,
+    es.estado AS estado_exposicion,
     e.organizador,
     e.texto1,
     e.texto2,
@@ -65,10 +73,111 @@ const SELECT_BASE = `
     e.cantidad,
     e.numeros_extra_razas,
     e.numeros_extra_cachorros,
+    e.cerrado_manual,
     cl.club AS club
   FROM exposiciones e
   LEFT JOIN clubes cl ON cl.id_club = e.id_club
+  LEFT JOIN exposiciones_estados es ON es.id_estado = e.id_estado
 `;
+
+/**
+ * Por club organizador (`id_club` + nombre de club no vacío):
+ * - **Finalizado** si `hasta` no es nula y `hasta::date < CURRENT_DATE`.
+ * - **Cerrado** desde **2 días antes** del inicio: `CURRENT_DATE >= desde::date - 2`.
+ * - Entre torneos aún no finalizados y antes de esa ventana: **un solo Abierto** por club
+ *   (el de `desde` más temprano); el resto **Cerrado** (nunca dos abiertos del mismo club).
+ * - Alta de un torneo posterior con otro abierto: queda **Cerrado** al recalcular.
+ * - **`cerrado_manual`**: el administrador cerró la exposición a mano → **Cerrado** y no compite
+ *   por “abierto”; la **siguiente** del club puede quedar abierta. El flag se borra al **finalizar**
+ *   o al aplicar el cierre automático **2 días antes** del inicio.
+ * **Sin club**: vigente → Abierto; post `hasta` → Finalizado.
+ */
+export async function aplicarReglasEstadoPorClubOrganizador() {
+  await query(
+    `WITH e2 AS (
+        SELECT
+          e.id_exposicion,
+          e.id_club,
+          e.desde,
+          e.hasta,
+          COALESCE(e.cerrado_manual, false) AS cerrado_manual,
+          cl.club
+        FROM exposiciones e
+        LEFT JOIN clubes cl ON cl.id_club = e.id_club
+      ),
+      labeled AS (
+        SELECT
+          id_exposicion,
+          id_club,
+          desde,
+          hasta,
+          cerrado_manual,
+          club,
+          (
+            id_club IS NULL
+            OR TRIM(COALESCE(club::text, '')) = ''
+          ) AS sin_club_valido,
+          (
+            hasta IS NOT NULL
+            AND hasta::date < CURRENT_DATE
+          ) AS es_finalizado,
+          (
+            desde IS NOT NULL
+            AND CURRENT_DATE >= (desde::date - 2)
+          ) AS cerrado_anticipo
+        FROM e2
+      ),
+      candidatos AS (
+        SELECT
+          l.id_exposicion,
+          l.id_club,
+          ROW_NUMBER() OVER (
+            PARTITION BY l.id_club
+            ORDER BY l.desde ASC NULLS LAST, l.id_exposicion ASC
+          ) AS rn
+        FROM labeled l
+        WHERE NOT l.sin_club_valido
+          AND NOT l.es_finalizado
+          AND NOT l.cerrado_anticipo
+          AND NOT l.cerrado_manual
+      ),
+      t AS (
+        SELECT
+          l.id_exposicion,
+          CASE
+            WHEN l.sin_club_valido THEN
+              CASE
+                WHEN l.es_finalizado THEN $3::smallint
+                ELSE $1::smallint
+              END
+            WHEN l.es_finalizado THEN $3::smallint
+            WHEN l.cerrado_manual THEN $2::smallint
+            WHEN l.cerrado_anticipo THEN $2::smallint
+            WHEN c.rn = 1 THEN $1::smallint
+            ELSE $2::smallint
+          END AS id_estado,
+          CASE
+            WHEN l.sin_club_valido THEN false
+            WHEN l.es_finalizado THEN false
+            WHEN l.cerrado_anticipo THEN false
+            ELSE l.cerrado_manual
+          END AS nuevo_cerrado_manual
+        FROM labeled l
+        LEFT JOIN candidatos c ON c.id_exposicion = l.id_exposicion
+      )
+      UPDATE exposiciones e
+      SET
+        id_estado = t.id_estado,
+        cerrado_manual = t.nuevo_cerrado_manual
+      FROM t
+      WHERE e.id_exposicion = t.id_exposicion
+        AND (
+          e.id_estado IS DISTINCT FROM t.id_estado
+          OR COALESCE(e.cerrado_manual, false) IS DISTINCT FROM t.nuevo_cerrado_manual
+        )`,
+    [ID_ESTADO_ABIERTO, ID_ESTADO_CERRADO, ID_ESTADO_FINALIZADO]
+  );
+}
 
 function formatPgDate(value) {
   if (value == null) return value;
@@ -90,8 +199,17 @@ function mapRow(row) {
   };
 }
 
+/** Catálogo para formularios (orden por id). */
+export async function listarEstados() {
+  const r = await query(
+    `SELECT id_estado, estado FROM exposiciones_estados ORDER BY id_estado ASC`
+  );
+  return r.rows;
+}
+
 /** Todas las filas, más recientes por fecha de inicio primero. */
 export async function listar() {
+  await aplicarReglasEstadoPorClubOrganizador();
   const r = await query(
     `${SELECT_BASE} ORDER BY e.desde DESC, e.id_exposicion DESC`
   );
@@ -100,6 +218,7 @@ export async function listar() {
 
 /** Misma lectura (con JOIN club) filtrada por id_club. */
 export async function listarPorIdClub(idClub) {
+  await aplicarReglasEstadoPorClubOrganizador();
   const r = await query(
     `${SELECT_BASE}
      WHERE e.id_club = $1
@@ -114,6 +233,7 @@ export async function listarPorIdClub(idClub) {
  * “Más adelante que el día de hoy” = próximas por calendario de inicio.
  */
 export async function listarProximas() {
+  await aplicarReglasEstadoPorClubOrganizador();
   const r = await query(
     `${SELECT_BASE}
      WHERE e.desde >= CURRENT_DATE
@@ -229,6 +349,7 @@ export async function crear(payload) {
       optIntNullable(numeros_extra_cachorros),
     ]
   );
+  await aplicarReglasEstadoPorClubOrganizador();
   return obtenerPorId(r.rows[0].id_exposicion);
 }
 
@@ -241,39 +362,52 @@ export async function actualizar(idExposicion, payload) {
   let i = 1;
 
   for (const col of COLUMNS) {
-    if (Object.prototype.hasOwnProperty.call(payload, col)) {
-      updates.push(`${col} = $${i}`);
-      let v = payload[col];
-      if (COLUMNAS_ENTERAS_OPCIONALES.has(col)) {
-        v = optIntNullable(v);
-      } else if (COLUMNAS_TEXTO_NOT_NULL_LEGACY.has(col)) {
-        v = strNotNull(v);
-      } else if (COLUMNAS_COORD_NOT_NULL_LEGACY.has(col)) {
-        v = coordLegacyNN(v);
-      } else if (col === "id_club") {
-        const ic = parseIdClubObligatorio(v);
-        if (ic == null) {
-          const err = new Error("id_club inválido");
-          err.code = "EXPO_ID_CLUB_INVALIDO";
-          throw err;
-        }
-        v = ic;
-      }
-      values.push(v);
-      i += 1;
+    if (col === "id_estado") continue;
+    if (!Object.prototype.hasOwnProperty.call(payload, col)) {
+      continue;
     }
+    updates.push(`${col} = $${i}`);
+    let v = payload[col];
+    if (COLUMNAS_ENTERAS_OPCIONALES.has(col)) {
+      v = optIntNullable(v);
+    } else if (COLUMNAS_TEXTO_NOT_NULL_LEGACY.has(col)) {
+      v = strNotNull(v);
+    } else if (COLUMNAS_COORD_NOT_NULL_LEGACY.has(col)) {
+      v = coordLegacyNN(v);
+    } else if (col === "id_club") {
+      const ic = parseIdClubObligatorio(v);
+      if (ic == null) {
+        const err = new Error("id_club inválido");
+        err.code = "EXPO_ID_CLUB_INVALIDO";
+        throw err;
+      }
+      v = ic;
+    }
+    values.push(v);
+    i += 1;
   }
 
-  if (updates.length === 0) {
-    return obtenerPorId(idExposicion);
+  if (Object.prototype.hasOwnProperty.call(payload ?? {}, "cerrado_manual")) {
+    const cm = payload.cerrado_manual;
+    if (typeof cm !== "boolean") {
+      const err = new Error("cerrado_manual debe ser true o false");
+      err.code = "EXPO_CERRADO_MANUAL_INVALIDO";
+      throw err;
+    }
+    updates.push(`cerrado_manual = $${i}`);
+    values.push(cm);
+    i += 1;
   }
 
-  values.push(idExposicion);
-  await query(
-    `UPDATE exposiciones SET ${updates.join(", ")}
-     WHERE id_exposicion = $${i}`,
-    values
-  );
+  if (updates.length > 0) {
+    values.push(idExposicion);
+    await query(
+      `UPDATE exposiciones SET ${updates.join(", ")}
+       WHERE id_exposicion = $${i}`,
+      values
+    );
+  }
+  await aplicarReglasEstadoPorClubOrganizador();
   return obtenerPorId(idExposicion);
 }
 
@@ -282,5 +416,9 @@ export async function eliminar(idExposicion) {
     `DELETE FROM exposiciones WHERE id_exposicion = $1 RETURNING id_exposicion`,
     [idExposicion]
   );
-  return r.rowCount > 0;
+  const ok = r.rowCount > 0;
+  if (ok) {
+    await aplicarReglasEstadoPorClubOrganizador();
+  }
+  return ok;
 }

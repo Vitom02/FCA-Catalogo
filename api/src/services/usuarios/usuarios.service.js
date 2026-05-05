@@ -181,6 +181,31 @@ export async function loginPorUsuarioYClave(usuarioRaw, claveRaw) {
   return mapUsuario(row);
 }
 
+/**
+ * @param {string} usuarioNormalizado valor ya pasado por optStr(..., 20)
+ * @param {number} [excluirIdUsuario] si se indica, se ignora esa fila (p. ej. al editar)
+ * @returns {Promise<boolean>}
+ */
+async function existeOtroUsuarioActivoConMismoNombre(usuarioNormalizado, excluirIdUsuario) {
+  if (!usuarioNormalizado) return false;
+  const params = [usuarioNormalizado];
+  let sql = `SELECT 1 FROM ${TABLE_USUARIOS}
+     WHERE LOWER(TRIM(usuario)) = LOWER(TRIM($1::text)) AND baja = false`;
+  if (excluirIdUsuario != null && Number.isFinite(Number(excluirIdUsuario))) {
+    sql += ` AND id_usuario <> $2`;
+    params.push(Number(excluirIdUsuario));
+  }
+  sql += ` LIMIT 1`;
+  const r = await query(sql, params);
+  return Boolean(r.rows[0]);
+}
+
+function errorUsuarioDuplicado() {
+  const err = new Error("Ya existe un usuario con ese nombre de usuario");
+  err.code = "USUARIOS_VALIDACION";
+  return err;
+}
+
 export async function crear(payload) {
   const nombre = optStr(payload.nombre, 30) ?? "";
   const apellido = optStr(payload.apellido, 30) ?? "";
@@ -205,14 +230,27 @@ export async function crear(payload) {
     throw err;
   }
 
-  const r = await query(
-    `INSERT INTO ${TABLE_USUARIOS} (
-       nombre, apellido, id_club, id_categoria, usuario, clave, baja
-     ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, false))
-     RETURNING id_usuario`,
-    [nombre, apellido, id_club, id_categoria, usuario, clave, optBool(payload.baja)]
-  );
-  return obtenerPorId(r.rows[0].id_usuario);
+  if (await existeOtroUsuarioActivoConMismoNombre(usuario)) {
+    throw errorUsuarioDuplicado();
+  }
+
+  let insertId;
+  try {
+    const r = await query(
+      `INSERT INTO ${TABLE_USUARIOS} (
+         nombre, apellido, id_club, id_categoria, usuario, clave, baja
+       ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, false))
+       RETURNING id_usuario`,
+      [nombre, apellido, id_club, id_categoria, usuario, clave, optBool(payload.baja)]
+    );
+    insertId = r.rows[0].id_usuario;
+  } catch (e) {
+    if (e && e.code === "23505") {
+      throw errorUsuarioDuplicado();
+    }
+    throw e;
+  }
+  return obtenerPorId(insertId);
 }
 
 export async function actualizar(idUsuario, payload) {
@@ -234,6 +272,9 @@ export async function actualizar(idUsuario, payload) {
         const err = new Error("usuario no puede ser vacío");
         err.code = "USUARIOS_VALIDACION";
         throw err;
+      }
+      if (await existeOtroUsuarioActivoConMismoNombre(v, idUsuario)) {
+        throw errorUsuarioDuplicado();
       }
     } else if (col === "clave") {
       v = String(v);
@@ -271,10 +312,17 @@ export async function actualizar(idUsuario, payload) {
   }
 
   values.push(idUsuario);
-  await query(
-    `UPDATE ${TABLE_USUARIOS} SET ${updates.join(", ")} WHERE id_usuario = $${i}`,
-    values
-  );
+  try {
+    await query(
+      `UPDATE ${TABLE_USUARIOS} SET ${updates.join(", ")} WHERE id_usuario = $${i}`,
+      values
+    );
+  } catch (e) {
+    if (e && e.code === "23505") {
+      throw errorUsuarioDuplicado();
+    }
+    throw e;
+  }
   return obtenerPorId(idUsuario);
 }
 

@@ -499,7 +499,7 @@ export function PaginaUsuarios({ session, clubes }) {
                                   className="session-home__btn session-home__btn--secondary admin-usuarios__btn--small"
                                   onClick={() => handleEliminar(u)}
                                 >
-                                  Eliminar
+                                  Dar Baja
                                 </button>
                               </div>
                             )}

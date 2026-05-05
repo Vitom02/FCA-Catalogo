@@ -59,13 +59,6 @@
   align-items: end;
 }
 
-@media (min-width: 560px) {
-  .session-home__field--expo-pick {
-    grid-column: span 2;
-    min-width: 0;
-  }
-}
-
 .session-home__filters-actions {
   display: flex;
   flex-wrap: wrap;
@@ -187,6 +180,7 @@
   min-height: 0;
   overflow: auto;
   border-radius: 8px;
+  border: 1px solid var(--table-grid);
   background: var(--card-bg);
   box-shadow: 0 1px 3px rgba(15, 39, 68, 0.06);
 }
@@ -285,6 +279,12 @@
   text-align: right;
 }
 
+.session-home__table th.session-home__cell--numeric,
+.session-home__table td.session-home__cell--numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .session-home__club-group-row .session-home__club-group-heading {
   text-align: left;
   font-size: 0.8125rem;
@@ -302,6 +302,21 @@
 
 .session-home__club-group-row .session-home__club-group-heading:first-child {
   border-left-width: 1px;
+}
+
+/* Última fila del tbody = encabezado de club (grupo sin filas o último bloque): redondeo inferior. */
+.session-home__table
+  tbody
+  tr.session-home__club-group-row:last-child
+  .session-home__club-group-heading:first-child {
+  border-bottom-left-radius: 8px;
+}
+
+.session-home__table
+  tbody
+  tr.session-home__club-group-row:last-child
+  .session-home__club-group-stat {
+  border-bottom-right-radius: 8px;
 }
 
 .session-home__club-group-stat {
@@ -438,6 +453,7 @@
   background: var(--card-bg);
   border: 1px solid var(--home-frame-border);
   border-radius: 10px;
+  overflow: hidden;
   box-shadow:
     0 0 0 2px var(--home-frame-outer),
     0 12px 32px rgba(10, 31, 53, 0.18);
@@ -447,7 +463,6 @@
 
 .expo-add-modal--compact {
   max-height: none;
-  overflow: visible;
 }
 
 .expo-add-modal__head--compact {
@@ -477,7 +492,7 @@
   width: 30px;
   height: 30px;
   border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   font-size: 1.25rem;
   line-height: 1;
@@ -519,7 +534,7 @@
   font-size: 0.8125rem;
   padding: 5px 8px;
   border: 1px solid var(--input-border);
-  border-radius: 5px;
+  border-radius: 6px;
   background: #fff;
   color: var(--card-text);
   box-sizing: border-box;
@@ -584,7 +599,7 @@
   width: 34px;
   padding: 0;
   border: 1px solid var(--input-border);
-  border-radius: 5px;
+  border-radius: 6px;
   background: #fff;
   font-size: 1.25rem;
   font-weight: 500;
@@ -608,7 +623,7 @@
   align-self: flex-start;
   padding: 5px 10px;
   border: 1px solid var(--input-border);
-  border-radius: 5px;
+  border-radius: 6px;
   background: #fff;
   font: inherit;
   font-size: 0.8125rem;

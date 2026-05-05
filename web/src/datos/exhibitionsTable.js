@@ -4,14 +4,29 @@
  * `Cantidad` = cupo/cantidad (visible sobre todo para usuario normal).
  * `Descripción` = nombre de la exposición.
  * `Números extra`: entero 1–10 (como string en filas).
- * `Estado`: solo Abierto o Cerrado.
+ * `Estado`: catálogo web.exposiciones_estados (id_estado en API).
  */
 
 export const NUMERO_EXTRA_MIN = 1
 export const NUMERO_EXTRA_MAX = 10
 
-/** Valores permitidos para la columna Estado */
-export const ESTADOS_EXPOSICION = ['Abierto', 'Cerrado']
+/** Etiquetas de estado (ids 1–3 en BD: Abierto, Cerrado, Finalizado). */
+export const ESTADOS_EXPOSICION = ['Abierto', 'Cerrado', 'Finalizado']
+
+/**
+ * @param {Record<string, unknown> & { id_estado?: number, Estado?: string }} [row]
+ * @returns {boolean}
+ */
+export function esExposicionEstadoAbierto(row) {
+  if (!row) return false
+  const idRaw = /** @type {{ id_estado?: unknown }} */ (row).id_estado
+  const id = idRaw != null ? Number(idRaw) : NaN
+  if (Number.isFinite(id)) return id === 1
+  const t = String(row['Estado'] ?? '')
+    .trim()
+    .toLowerCase()
+  return t === 'abierto'
+}
 
 export const EXHIBITION_TABLE_COLUMNS = [
   'Número',
@@ -22,6 +37,11 @@ export const EXHIBITION_TABLE_COLUMNS = [
   'Números extra',
   'Estado',
 ]
+
+/** Columnas con valores numéricos o fechas (alineación derecha en tablas). */
+export const EXHIBITION_NUMERIC_COLUMNS = Object.freeze(
+  new Set(['Número', 'Fecha inicio', 'Fecha fin', 'Cantidad', 'Números extra'])
+)
 
 /**
  * @typedef {string} KennelId

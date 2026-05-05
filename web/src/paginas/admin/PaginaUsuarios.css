@@ -77,12 +77,13 @@
   max-width: 22rem;
   max-height: min(90vh, 32rem);
   overflow: auto;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 16px 18px 14px;
   background: var(--card-bg);
   color: var(--card-text);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
   border: 1px solid var(--home-frame-border);
+  box-sizing: border-box;
 }
 
 .admin-user-modal__title {

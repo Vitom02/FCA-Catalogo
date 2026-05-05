@@ -9,6 +9,7 @@ import {
 } from '../../apiConnect.jsx'
 import { VistaAnotacionExposicion } from '../../componentes/exposicion/VistaAnotacionExposicion.jsx'
 import {
+  esExposicionEstadoAbierto,
   getExhibitionRowKey,
   sessionMatchesExhibitionRow,
 } from '../../datos/exhibitionsTable.js'
@@ -58,7 +59,11 @@ export function PaginaExposicion({
 
   const canAccess = useMemo(() => {
     if (!exhibition) return false
-    return sessionMatchesExhibitionRow(session, exhibition)
+    if (!sessionMatchesExhibitionRow(session, exhibition)) return false
+    if (session.role !== 'superadmin' && !esExposicionEstadoAbierto(exhibition)) {
+      return false
+    }
+    return true
   }, [session, exhibition])
 
   const rowKey = exhibition ? getExhibitionRowKey(exhibition) : ''

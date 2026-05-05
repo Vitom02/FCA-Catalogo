@@ -22,6 +22,19 @@ export function mapExposicionApiToRow(api) {
   const idClub = api.id_club != null ? Number(api.id_club) : null
   const idExpo = api.id_exposicion != null ? Number(api.id_exposicion) : null
 
+  const idEstadoRaw = api.id_estado != null ? Number(api.id_estado) : null
+  const idEstado =
+    idEstadoRaw != null && Number.isFinite(idEstadoRaw)
+      ? Math.trunc(idEstadoRaw)
+      : 1
+  const estadoExpo = String(api.estado_exposicion ?? '').trim()
+
+  const cerradoManualRaw = api.cerrado_manual
+  const cerradoManual =
+    cerradoManualRaw === true ||
+    cerradoManualRaw === 1 ||
+    cerradoManualRaw === '1'
+
   const kennelFromClub =
     idClub != null && !Number.isNaN(idClub) ? String(idClub) : ''
 
@@ -40,6 +53,7 @@ export function mapExposicionApiToRow(api) {
   return {
     id_exposicion: idExpo ?? undefined,
     id_club: idClub,
+    id_estado: idEstado,
     club: normalizeClubFromApi(api.club),
     kennelId: kennelFromClub,
     'Número': idExpo != null && !Number.isNaN(idExpo) ? String(idExpo) : '',
@@ -47,12 +61,13 @@ export function mapExposicionApiToRow(api) {
     'Fecha inicio': desde,
     'Fecha fin': hasta,
     Cantidad: '—',
-    /** Valor de catálogo solo lectura en el modal (no viene de la API). */
+    /** Números extra por tipo (API); el campo de tabla único es tema aparte. */
     'Números extra': '1',
-    Estado: 'Abierto',
+    Estado: estadoExpo || 'Abierto',
     cupo_limite: cupoLimite,
     numeros_extra_razas: extraRazas,
     numeros_extra_cachorros: extraCachorros,
+    cerrado_manual: cerradoManual,
   }
 }
 
