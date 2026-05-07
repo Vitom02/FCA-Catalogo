@@ -1,7 +1,12 @@
 import { query } from "../database/index.js";
 
 export function getHealthInfo() {
-  return { ok: true, service: "kennel-fca-api" };
+  return {
+    ok: true,
+    service: "kennel-fca-api",
+    /** Sube en cada deploy para comprobar que el stack nuevo está en línea (`GET /health`). */
+    deployStamp: "2026-05-08-verify",
+  };
 }
 
 export async function pingDatabase() {

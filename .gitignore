@@ -17,6 +17,9 @@ api/.env
 .env
 *.local
 
+# Respaldos de base (solo en servidor; no versionar dumps)
+backups/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
