@@ -42,6 +42,10 @@ export function PaginaExposicion({
   /** @type {'idle' | 'loading' | 'ok' | 'error'} */
   const [catalogosLoad, setCatalogosLoad] = useState('idle')
   const [catalogosError, setCatalogosError] = useState(/** @type {string | null} */ (null))
+  /** Filas crudas del GET detalle (misma respuesta que PDF); evita un segundo request al generar PDF. */
+  const [catalogoDetalleFilas, setCatalogoDetalleFilas] = useState(
+    /** @type {Record<string, unknown>[] | null} */ (null),
+  )
 
   const decodedKey = useMemo(() => {
     if (expoKey == null) return ''
@@ -71,9 +75,11 @@ export function PaginaExposicion({
 
   const aplicarFilasCatalogo = useCallback(
     (rows) => {
+      const list = Array.isArray(rows) ? rows : []
+      setCatalogoDetalleFilas(list)
       setEnrollmentsByExhibition((prev) => ({
         ...prev,
-        [rowKey]: rows.map((r) => mapCatalogoDetalleToEnrollment(r)),
+        [rowKey]: list.map((r) => mapCatalogoDetalleToEnrollment(r)),
       }))
     },
     [rowKey, setEnrollmentsByExhibition],
@@ -91,6 +97,7 @@ export function PaginaExposicion({
     let cancelled = false
     setCatalogosLoad('loading')
     setCatalogosError(null)
+    setCatalogoDetalleFilas(null)
     listarCatalogosPorExposicionDetalle(idExposicion)
       .then((data) => {
         if (cancelled) return
@@ -211,6 +218,7 @@ export function PaginaExposicion({
         exhibition={exhibition}
         session={session}
         enrollments={enrollments}
+        catalogoDetalleFilas={catalogoDetalleFilas}
         onAddEnrollment={handleAddEnrollment}
         onUpdateEnrollment={handleUpdateEnrollment}
         onRemoveEnrollment={handleRemoveEnrollment}

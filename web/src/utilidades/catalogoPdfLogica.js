@@ -2,13 +2,15 @@
  * Orden y agrupación del catálogo para PDF: misma jerarquía que el resumen
  * (grupo → raza alfabética → categoría por n.º de clase **descendente** y sexo en empate → ejemplares por n.º catálogo descendente).
  *
- * Los textos de raza para PDF vienen de `web.razas`: **función** = `funcion`, **características** = `descripcion`
- * (expuestos en el detalle como `raza_funcion`, `raza_descripcion`). `infoRazaPorIdRaza` sigue pudiendo sobreescribir.
+ * Los textos de raza para PDF: **trayectoria** = país desde `web.razas.id_pais` → `web.paises.pais` (`raza_trayectoria`);
+ * **función** = `funcion`; **características** = `descripcion` (`raza_funcion`, `raza_descripcion`).
+ * `infoRazaPorIdRaza` sigue pudiendo sobreescribir.
  */
 
+import dayjs from 'dayjs'
 import { formatTableDate } from './dateDisplay.js'
 
-/** @typedef {{ procedencia?: string, funcion?: string, caracteristicas?: string }} CatalogoPdfRazaInfoLocal */
+/** @typedef {{ trayectoria?: string, procedencia?: string, funcion?: string, caracteristicas?: string }} CatalogoPdfRazaInfoLocal */
 
 /**
  * Entero positivo (p. ej. n.º FCI 1–10) → número romano. 0 o fuera de rango → ''.
@@ -158,34 +160,61 @@ export function lineaEjemplarCatalogoPdfPorDefecto(row, opts = {}) {
   const nro = row?.numero != null && row.numero !== '' ? String(row.numero).trim() : ''
   const nom = String(row?.nombre_completo ?? '').trim()
   const reg = String(row?.registro ?? '').trim()
-  const sex = String(row?.sexo ?? '').trim()
-  const fed = String(row?.codigo_pais ?? '').trim()
-  const ini = incluirNro && nro ? `${nro}. ` : ''
-  const nombrePart = nom ? `${ini}${nom}` : (ini || '—')
-  const core = [reg ? `REG. ${reg}` : '', fed, sex].filter(Boolean)
+  const sexFull = String(row?.sexo ?? '').trim()
+  const sex =
+    sexFull === 'HEMBRA'
+      ? 'H'
+      : sexFull === 'MACHO'
+        ? 'M'
+        : (sexFull.slice(0, 1) || '').toUpperCase()
+  const fed = String(row?.codigo_pais_federacion ?? row?.codigo_pais ?? '').trim()
+  const ni = String(row?.nacional_importado ?? '').trim().toUpperCase()
+  const niShort = ni === 'I' || ni === 'N' ? ni : ''
+
+  const cabezal =
+    incluirNro && nro && nom ? `${nro} ${nom}` : nom ? nom : incluirNro && nro ? nro : ''
+
   /** @type {string[]} */
-  const tail = []
+  const cuerpo = []
+  if (reg) {
+    cuerpo.push(fed ? `${fed} ${reg}` : reg)
+  } else if (fed) {
+    cuerpo.push(fed)
+  }
+  if (niShort) cuerpo.push(niShort)
+
   const fnac = row?.fecha_nacimiento
   if (fnac != null && String(fnac).trim() !== '') {
-    const fd = formatTableDate(fnac)
-    if (fd !== '—') tail.push(`NAC: ${fd}`)
+    const d = dayjs(String(fnac).trim())
+    const nacTxt = d.isValid()
+      ? `NAC: ${d.format('DD/MM/YY')}`
+      : (() => {
+          const fd = formatTableDate(fnac)
+          return fd !== '—' ? `NAC: ${fd}` : ''
+        })()
+    if (nacTxt) cuerpo.push(nacTxt)
   }
+
+  if (sex) cuerpo.push(sex)
+
   const nomPad = String(row?.nombre_padre ?? '').trim()
   const nomMad = String(row?.nombre_madre ?? '').trim()
   if (nomPad || nomMad) {
-    const por = [nomPad, nomMad].filter(Boolean).join(' / ')
-    tail.push(`POR: ${por}`)
+    cuerpo.push(`POR: ${[nomPad, nomMad].filter(Boolean).join(' y ')}`)
   }
-  const ni = String(row?.nacional_importado ?? '').trim().toUpperCase()
-  if (ni === 'I' || ni === 'N') tail.push(`N/I: ${ni}`)
+
+  const criador = String(row?.criador ?? '').trim()
+  if (criador) cuerpo.push(`CR.: ${criador}`)
+
   const chip = String(row?.microchip ?? '').trim()
-  if (chip) tail.push(`CHIP: ${chip}`)
+  if (chip) cuerpo.push(`CHIP: ${chip}`)
+
   const prop = String(row?.propietario ?? '').trim()
-  if (prop) tail.push(`EXP.: ${prop}`)
-  const mid = core.length ? core.join(sep) : ''
-  let line = mid ? `${nombrePart}${sep}${mid}` : nombrePart
-  if (tail.length) line += sep + tail.join(sep)
-  return line
+  if (prop) cuerpo.push(`EXP.: ${prop}`)
+
+  if (!cabezal && cuerpo.length === 0) return ''
+  if (cuerpo.length === 0) return cabezal
+  return cabezal ? `${cabezal}${sep}${cuerpo.join(sep)}` : cuerpo.join(sep)
 }
 
 /**
@@ -203,7 +232,7 @@ function infoRazaParaId(idRaza, mapa) {
 }
 
 /**
- * Combina datos de raza desde el detalle (`raza_funcion`, `raza_descripcion`) con `infoRazaPorIdRaza`.
+ * Combina datos de raza desde el detalle (`raza_trayectoria`, `raza_funcion`, `raza_descripcion`) con `infoRazaPorIdRaza`.
  * Características del PDF = columna `descripcion` en BD.
  *
  * @param {Record<string, unknown> | null | undefined} filaMuestra
@@ -222,7 +251,10 @@ function mergeInfoRazaPdf(filaMuestra, idRaza, opciones) {
     return d || undefined
   }
   return {
-    procedencia: pick(fromMap.procedencia, undefined),
+    trayectoria: pick(
+      fromMap.trayectoria ?? fromMap.procedencia,
+      filaMuestra?.raza_trayectoria,
+    ),
     funcion: pick(fromMap.funcion, filaMuestra?.raza_funcion),
     caracteristicas: pick(fromMap.caracteristicas, filaMuestra?.raza_descripcion),
   }

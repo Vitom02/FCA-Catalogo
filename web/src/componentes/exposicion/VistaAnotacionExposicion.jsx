@@ -130,12 +130,14 @@ function etiquetaRaza(r) {
  *   onRemoveEnrollment: (index: number) => void,
  *   catalogosCargando?: boolean,
  *   catalogosError?: string | null,
+ *   catalogoDetalleFilas?: Record<string, unknown>[] | null,
  * }} props
  */
 export function VistaAnotacionExposicion({
   exhibition,
   session,
   enrollments,
+  catalogoDetalleFilas = null,
   onAddEnrollment,
   onUpdateEnrollment,
   onRemoveEnrollment,
@@ -793,8 +795,14 @@ export function VistaAnotacionExposicion({
     }
     setPdfPreparando(true)
     try {
-      const data = await listarCatalogosPorExposicionDetalle(idExposicion)
-      const filas = Array.isArray(data) ? data : []
+      let filas =
+        Array.isArray(catalogoDetalleFilas) && catalogoDetalleFilas.length > 0
+          ? catalogoDetalleFilas
+          : null
+      if (!filas) {
+        const data = await listarCatalogosPorExposicionDetalle(idExposicion)
+        filas = Array.isArray(data) ? data : []
+      }
       if (filas.length === 0) {
         window.alert('No hay inscriptos en el catálogo para generar el PDF.')
         return

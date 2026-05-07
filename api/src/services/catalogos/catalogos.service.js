@@ -50,7 +50,8 @@ function mapRow(row) {
 
 /**
  * Detalle de inscriptos (grilla + PDF). Un solo parámetro: `id_exposicion`.
- * Misma base que el listado formal: expo, club, categoría, ejemplar, raza, N/I, propietarios, etc.
+ * Propietario y criador se calculan con CTEs + JOIN (no subconsultas por fila), para escalar
+ * con muchas inscripciones. Índices: migración `020_catalogos_detalle_indexes.sql`.
  */
 export async function listarPorExposicionDetalle(idExposicion) {
   const n = Number(idExposicion);
@@ -62,7 +63,43 @@ export async function listarPorExposicionDetalle(idExposicion) {
   const T_EC = fromTable("exposiciones_categorias");
   const T_U = fromTable("usuarios");
   const r = await query(
-    `SELECT
+    `WITH catalogo_ejemplares AS (
+       SELECT DISTINCT c.id_ejemplar
+       FROM ${TABLE} c
+       WHERE c.id_exposicion = $1
+     ),
+     propietarios_agg AS (
+       SELECT
+         pe.id_ejemplar,
+         STRING_AGG(
+           TRIM(CONCAT_WS(' ', p.nombre::text, p.apellido::text)),
+           ', '
+           ORDER BY p.apellido, p.nombre, p.id_propietario
+         ) AS propietario
+       FROM catalogo_ejemplares ce
+       JOIN web.propiedades_ejemplares pe ON pe.id_ejemplar = ce.id_ejemplar
+       JOIN web.propiedades_propietarios pp ON pp.id_propiedad = pe.id_propiedad
+       JOIN web.propietarios p ON p.id_propietario = pp.id_propietario
+       WHERE pe.hasta IS NULL
+       GROUP BY pe.id_ejemplar
+     ),
+     criadores_agg AS (
+       SELECT
+         ej.id_ejemplar,
+         STRING_AGG(
+           TRIM(CONCAT_WS(' ', p.nombre::text, p.apellido::text)),
+           ', '
+           ORDER BY p.apellido, p.nombre, p.id_propietario
+         ) AS criador
+       FROM catalogo_ejemplares ce
+       JOIN web.ejemplares ej ON ej.id_ejemplar = ce.id_ejemplar
+       JOIN web.servicios s ON s.id_servicio = ej.id_servicio
+       JOIN web.criaderos cr ON cr.id_criadero = s.id_criadero
+       JOIN web.propiedades_propietarios pp ON pp.id_propiedad = cr.id_propiedad
+       JOIN web.propietarios p ON p.id_propietario = pp.id_propietario
+       GROUP BY ej.id_ejemplar
+     )
+     SELECT
        c.id_catalogo,
        c.id_exposicion,
        c.id_ejemplar,
@@ -82,11 +119,7 @@ export async function listarPorExposicionDetalle(idExposicion) {
          WHEN 'M' THEN 'MACHO'
          ELSE NULLIF(UPPER(TRIM(e.sexo)), '')
        END AS sexo,
-       CONCAT_WS(
-         ' - ',
-         NULLIF(TRIM(COALESCE(fp.codigo_pais, f.codigo_pais, fo.codigo_pais, e.codigo_pais)), ''),
-         NULLIF(TRIM(COALESCE(fp.federacion, f.federacion, fo.federacion)), '')
-       ) AS codigo_pais,
+       COALESCE(f.codigo_pais, fo.codigo_pais) AS codigo_pais,
        COALESCE(f.codigo_pais, fo.codigo_pais, e.codigo_pais) AS codigo_pais_federacion,
        CASE WHEN e.id_federacion IS NULL THEN 'I' ELSE 'N' END AS nacional_importado,
        NULLIF(TRIM(r.raza), '') AS raza,
@@ -104,6 +137,7 @@ export async function listarPorExposicionDetalle(idExposicion) {
        NULLIF(TRIM(COALESCE(e.microchip, '')), '') AS microchip,
        NULLIF(TRIM(COALESCE(r.funcion, '')), '') AS raza_funcion,
        NULLIF(TRIM(COALESCE(r.descripcion, '')), '') AS raza_descripcion,
+       NULLIF(TRIM(COALESCE(pai.pais::text, '')), '') AS raza_trayectoria,
        e.fecha_nacimiento,
        NULLIF(
          TRIM(COALESCE(web.ejemplar_nombre(ep.nombre, ep.prefijo, ep.sufijo), '')),
@@ -113,31 +147,23 @@ export async function listarPorExposicionDetalle(idExposicion) {
          TRIM(COALESCE(web.ejemplar_nombre(em.nombre, em.prefijo, em.sufijo), '')),
          ''
        ) AS nombre_madre,
-       NULLIF(TRIM((
-         SELECT STRING_AGG(
-           TRIM(CONCAT_WS(' ', p.nombre::text, p.apellido::text)),
-           ', '
-           ORDER BY p.apellido, p.nombre, p.id_propietario
-         )
-         FROM web.propiedades_ejemplares pe
-         JOIN web.propiedades_propietarios pp ON pp.id_propiedad = pe.id_propiedad
-         JOIN web.propietarios p ON p.id_propietario = pp.id_propietario
-         WHERE pe.hasta IS NULL
-           AND pe.id_ejemplar = e.id_ejemplar
-       )), '') AS propietario
-     FROM ${TABLE} c
-     JOIN web.exposiciones x ON x.id_exposicion = c.id_exposicion
+       NULLIF(TRIM(COALESCE(pa.propietario, '')), '') AS propietario,
+       NULLIF(TRIM(COALESCE(ca.criador, '')), '') AS criador
+     FROM web.exposiciones x
      LEFT JOIN web.clubes cu ON cu.id_club = x.id_club
+     JOIN ${TABLE} c ON c.id_exposicion = x.id_exposicion
      JOIN ${T_EC} ec ON ec.id_categoria = c.id_categoria
      JOIN web.ejemplares e ON e.id_ejemplar = c.id_ejemplar
+     LEFT JOIN web.federaciones f ON f.id_federacion = e.id_federacion
+     LEFT JOIN web.federaciones fo ON fo.id_federacion = e.id_federacion_origen
      JOIN web.razas r ON r.id_raza = e.id_raza
+     LEFT JOIN web.paises pai ON pai.id_pais = r.id_pais
      LEFT JOIN web.ejemplares ep ON ep.id_ejemplar = e.id_ejemplar_padre
      LEFT JOIN web.ejemplares em ON em.id_ejemplar = e.id_ejemplar_madre
      LEFT JOIN web.razas_grupos rg ON rg.id_grupo = r.id_grupo
-     LEFT JOIN web.federaciones f ON f.id_federacion = e.id_federacion
-     LEFT JOIN web.federaciones fo ON fo.id_federacion = e.id_federacion_origen
-     LEFT JOIN web.federaciones fp ON fp.codigo_pais = COALESCE(f.codigo_pais, fo.codigo_pais, e.codigo_pais)
      LEFT JOIN ${T_U} u ON u.id_usuario = c.id_usuario
+     LEFT JOIN propietarios_agg pa ON pa.id_ejemplar = e.id_ejemplar
+     LEFT JOIN criadores_agg ca ON ca.id_ejemplar = e.id_ejemplar
      WHERE c.id_exposicion = $1
      ORDER BY r.id_grupo, r.raza, e.sexo, c.id_categoria, e.fecha_nacimiento NULLS LAST, c.id_catalogo`,
     [n]
