@@ -25,12 +25,27 @@
   min-width: 0;
 }
 
-.app-header__title {
-  font-family: var(--heading);
-  font-weight: 600;
-  font-size: 1.125rem;
-  letter-spacing: -0.02em;
-  color: var(--text-on-dark);
+.app-header__brand-link {
+  display: flex;
+  align-items: center;
+  line-height: 0;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.app-header__brand-link:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 3px;
+}
+
+.app-header__logo {
+  display: block;
+  height: 50px;
+  width: auto;
+  max-width: min(260px, 48vw);
+  object-fit: contain;
+  object-position: left center;
 }
 
 .app-header__session {
@@ -163,6 +178,11 @@
     width: 36px;
     height: 36px;
     font-size: 0.75rem;
+  }
+
+  .app-header__logo {
+    height: 42px;
+    max-width: min(220px, 56vw);
   }
 }
 

@@ -3,9 +3,12 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   ApiError,
   actualizarCatalogo,
+  cerrarTorneoYNumerarCatalogo,
   crearCatalogo,
   eliminarCatalogo,
+  listarCatalogosConteosPorExposicion,
   listarCatalogosPorExposicionDetalle,
+  listarExposicionesProximas,
 } from '../../apiConnect.jsx'
 import { VistaAnotacionExposicion } from '../../componentes/exposicion/VistaAnotacionExposicion.jsx'
 import {
@@ -13,7 +16,11 @@ import {
   getExhibitionRowKey,
   sessionMatchesExhibitionRow,
 } from '../../datos/exhibitionsTable.js'
-import { mapCatalogoDetalleToEnrollment } from '../../utilidades/mapCatalogoApi.js'
+import { mapCatalogoDetalleToEnrollment, sortCatalogoDetallePorNumeroCatalogo } from '../../utilidades/mapCatalogoApi.js'
+import {
+  mapConteosCantidadEnFilas,
+  mapListaExposicionesApi,
+} from '../../utilidades/mapExposicionesApi.js'
 import '../catalogo/PaginaInicio.css'
 import './PaginaExposicion.css'
 
@@ -30,6 +37,7 @@ import './PaginaExposicion.css'
  *   setEnrollmentsByExhibition: React.Dispatch<
  *     React.SetStateAction<Record<string, Record<string, unknown>[]>>
  *   >,
+ *   setExhibitionRows?: React.Dispatch<React.SetStateAction<import('../../datos/exhibitionsTable.js').ExhibitionRow[]>>,
  * }} props
  */
 export function PaginaExposicion({
@@ -37,6 +45,7 @@ export function PaginaExposicion({
   exhibitionRows,
   enrollmentsByExhibition,
   setEnrollmentsByExhibition,
+  setExhibitionRows,
 }) {
   const { expoKey } = useParams()
   /** @type {'idle' | 'loading' | 'ok' | 'error'} */
@@ -76,10 +85,11 @@ export function PaginaExposicion({
   const aplicarFilasCatalogo = useCallback(
     (rows) => {
       const list = Array.isArray(rows) ? rows : []
-      setCatalogoDetalleFilas(list)
+      const ordered = sortCatalogoDetallePorNumeroCatalogo(list)
+      setCatalogoDetalleFilas(ordered)
       setEnrollmentsByExhibition((prev) => ({
         ...prev,
-        [rowKey]: list.map((r) => mapCatalogoDetalleToEnrollment(r)),
+        [rowKey]: ordered.map((r) => mapCatalogoDetalleToEnrollment(r)),
       }))
     },
     [rowKey, setEnrollmentsByExhibition],
@@ -91,6 +101,44 @@ export function PaginaExposicion({
     const rows = Array.isArray(data) ? data : []
     aplicarFilasCatalogo(rows)
   }, [idExposicion, aplicarFilasCatalogo])
+
+  const recargarFilasExposiciones = useCallback(async () => {
+    if (setExhibitionRows == null) return
+    try {
+      const [data, conteos] = await Promise.all([
+        listarExposicionesProximas(),
+        listarCatalogosConteosPorExposicion().catch(() => []),
+      ])
+      const base = mapListaExposicionesApi(data)
+      let merged = mapConteosCantidadEnFilas(base, conteos)
+      if (session.role !== 'superadmin') {
+        merged = merged.filter((r) => esExposicionEstadoAbierto(r))
+      }
+      setExhibitionRows(merged)
+    } catch {
+      /* listado principal se actualiza en la próxima visita al inicio */
+    }
+  }, [setExhibitionRows, session.role])
+
+  const numeracionAutomatica = useMemo(
+    () => exhibition != null && Number(exhibition.tipo_numeracion) !== 1,
+    [exhibition],
+  )
+
+  const handleCerrarTorneoYNumerar = useCallback(async () => {
+    if (idExposicion == null) return
+    try {
+      await cerrarTorneoYNumerarCatalogo(idExposicion)
+      await refreshCatalogos()
+      await recargarFilasExposiciones()
+    } catch (e) {
+      window.alert(
+        e instanceof ApiError
+          ? e.message
+          : 'No se pudo cerrar el torneo ni asignar la numeración.',
+      )
+    }
+  }, [idExposicion, refreshCatalogos, recargarFilasExposiciones])
 
   useEffect(() => {
     if (idExposicion == null || !rowKey) return
@@ -141,12 +189,21 @@ export function PaginaExposicion({
       return
     }
     try {
-      await crearCatalogo({
+      /** @type {Record<string, unknown>} */
+      const body = {
         id_exposicion: idExposicion,
         id_ejemplar: idEj,
         id_categoria: idCat,
         id_usuario: idUsuario,
-      })
+      }
+      const numRaw = entry.numero
+      if (numRaw !== undefined && numRaw !== null && numRaw !== '') {
+        const n = Number(numRaw)
+        if (Number.isFinite(n) && n >= 1) {
+          body.numero = Math.trunc(n)
+        }
+      }
+      await crearCatalogo(body)
       await refreshCatalogos()
     } catch (e) {
       window.alert(
@@ -167,9 +224,17 @@ export function PaginaExposicion({
       return
     }
     try {
+      /** @type {Record<string, unknown>} */
       const payload = {}
       if (idCat != null && Number.isFinite(Number(idCat))) {
         payload.id_categoria = Number(idCat)
+      }
+      const rawNum = entry.numero
+      if (rawNum !== undefined && rawNum !== null && rawNum !== '') {
+        const n = Number(rawNum)
+        if (Number.isFinite(n) && n >= 1) {
+          payload.numero = Math.trunc(n)
+        }
       }
       if (Object.keys(payload).length > 0) {
         await actualizarCatalogo(idCatalogo, payload)
@@ -222,6 +287,9 @@ export function PaginaExposicion({
         onAddEnrollment={handleAddEnrollment}
         onUpdateEnrollment={handleUpdateEnrollment}
         onRemoveEnrollment={handleRemoveEnrollment}
+        onCerrarTorneoYNumerar={
+          numeracionAutomatica ? handleCerrarTorneoYNumerar : undefined
+        }
         catalogosCargando={catalogosLoad === 'loading'}
         catalogosError={catalogosError}
       />

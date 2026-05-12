@@ -90,6 +90,7 @@ function AppShell() {
                   exhibitionRows={exhibitionRows}
                   enrollmentsByExhibition={enrollmentsByExhibition}
                   setEnrollmentsByExhibition={setEnrollmentsByExhibition}
+                  setExhibitionRows={setExhibitionRows}
                 />
               }
             />

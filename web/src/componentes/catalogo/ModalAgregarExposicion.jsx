@@ -20,6 +20,8 @@ function emptyForm() {
     extraRazas: '',
     extraCachorros: '',
     modoCierre: /** @type {'auto' | 'manual'} */ ('auto'),
+    /** 1 = manual, 2 = automática */
+    tipoNumeracion: /** @type {1 | 2} */ (2),
   }
 }
 
@@ -41,6 +43,9 @@ function rowToForm(row) {
       ? 'manual'
       : 'auto'
 
+  const tn = /** @type {{ tipo_numeracion?: number }} */ (row).tipo_numeracion
+  const tipoNumeracion = tn === 1 ? /** @type {1 | 2} */ (1) : /** @type {1 | 2} */ (2)
+
   return {
     nombre: String(row['Descripción'] ?? '').trim(),
     fechaInicio: String(row['Fecha inicio'] ?? '').trim(),
@@ -51,6 +56,7 @@ function rowToForm(row) {
     extraRazas: er != null && Number.isFinite(Number(er)) ? String(er) : '',
     extraCachorros: ec != null && Number.isFinite(Number(ec)) ? String(ec) : '',
     modoCierre,
+    tipoNumeracion,
   }
 }
 
@@ -89,6 +95,7 @@ function buildApiBody(form, opts = {}) {
     cantidad: toOptIntStr(form.cantidad),
     numeros_extra_razas: toOptIntStr(form.extraRazas),
     numeros_extra_cachorros: toOptIntStr(form.extraCachorros),
+    tipo_numeracion: form.tipoNumeracion === 1 ? 1 : 2,
   }
   if (opts.esEdicion) {
     body.cerrado_manual = form.modoCierre === 'manual'
@@ -500,6 +507,24 @@ export function ModalAgregarExposicion({
               />
             </label>
           </div>
+
+          <label className="expo-add-modal__field expo-add-modal__field--compact">
+            <span className="expo-add-modal__label">Numeración de catálogo</span>
+            <select
+              className="expo-add-modal__select expo-add-modal__input--compact"
+              value={form.tipoNumeracion === 1 ? '1' : '2'}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  tipoNumeracion: e.target.value === '1' ? 1 : 2,
+                }))
+              }
+              disabled={guardando}
+            >
+              <option value="1">Manual</option>
+              <option value="2">Automática</option>
+            </select>
+          </label>
 
           {idExposicionEdicion != null ? (
             <label className="expo-add-modal__field expo-add-modal__field--compact">

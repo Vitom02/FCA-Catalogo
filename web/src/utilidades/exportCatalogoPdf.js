@@ -16,6 +16,9 @@ export {
   lineaEjemplarCatalogoPdfPorDefecto,
   filasDetalleAPaginasPdf,
   enteroARomano,
+  PDF_MACRO_SECCIONES_CATALOGO,
+  compararEjemplarPdfMachoPrimeroMasAdultoPrimero,
+  filasDetalleEnOrdenCatalogoPdf,
 } from './catalogoPdfLogica.js'
 
 /**
@@ -32,12 +35,19 @@ export {
  */
 
 /**
+ * @typedef {{ tituloGrupo: string, secciones: CatalogoPdfSeccionRaza[] }} CatalogoPdfBloqueGrupo
+ * Bloque por grupo FCI dentro de una macro-sección (ADULTOS, …).
+ */
+
+/**
  * @typedef {{
  *   titulo: string,
  *   subtitulo: string,
- *   secciones: CatalogoPdfSeccionRaza[],
+ *   grupos: CatalogoPdfBloqueGrupo[],
+ *   secciones?: CatalogoPdfSeccionRaza[],
  *   numeroPagina?: number | string,
  * }} CatalogoPdfPagina
+ * Si faltan `grupos`, se usa `secciones` como una sola agrupación sin título de grupo (compat).
  */
 
 export function getCatalogoPdfStyles() {
@@ -154,7 +164,11 @@ function htmlSeccionRaza(seccion, esPrimera) {
 export function buildCatalogoPdfPaginaHtml(pagina, meta = {}) {
   const titulo = String(pagina.titulo ?? '').trim()
   const subtitulo = String(pagina.subtitulo ?? '').trim()
-  const secciones = Array.isArray(pagina.secciones) ? pagina.secciones : []
+  const gruposIn = Array.isArray(pagina.grupos) ? pagina.grupos : []
+  const grupos =
+    gruposIn.length > 0
+      ? gruposIn
+      : [{ tituloGrupo: '', secciones: Array.isArray(pagina.secciones) ? pagina.secciones : [] }]
   const nPag = pagina.numeroPagina
   const total = meta.totalPaginas
   const indicePie = meta.indice ?? nPag
@@ -166,9 +180,20 @@ export function buildCatalogoPdfPaginaHtml(pagina, meta = {}) {
     .filter(Boolean)
     .join('\n')
 
-  const cuerpoRazas = secciones
-    .map((sec, i) => htmlSeccionRaza(sec, i === 0))
-    .join('\n')
+  const partes = []
+  let primeraSeccionGlobal = true
+  for (const bloque of grupos) {
+    const tituloGrupo = String(bloque?.tituloGrupo ?? '').trim()
+    if (tituloGrupo) {
+      partes.push(`<h3 class="pdf-group">${escapeHtml(tituloGrupo)}</h3>`)
+    }
+    const secciones = Array.isArray(bloque?.secciones) ? bloque.secciones : []
+    for (const sec of secciones) {
+      partes.push(htmlSeccionRaza(sec, primeraSeccionGlobal))
+      primeraSeccionGlobal = false
+    }
+  }
+  const cuerpoRazas = partes.join('\n')
 
   let pie = ''
   if (

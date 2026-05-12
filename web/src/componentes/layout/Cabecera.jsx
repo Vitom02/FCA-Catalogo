@@ -63,7 +63,18 @@ export function Cabecera({ session, onLogout }) {
     <header className="app-header" role="banner">
       <div className="app-header__inner">
         <div className="app-header__brand">
-          <span className="app-header__title">FCA</span>
+          <Link
+            to="/"
+            className="app-header__brand-link"
+            aria-label="Inicio — FCA catálogo"
+          >
+            <img
+              className="app-header__logo"
+              src={`${import.meta.env.BASE_URL}assets/logo.jpg`}
+              alt="FCA"
+              decoding="async"
+            />
+          </Link>
         </div>
 
         {session ? (

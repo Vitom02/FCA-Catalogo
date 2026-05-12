@@ -1,6 +1,9 @@
 /**
- * Orden y agrupación del catálogo para PDF: misma jerarquía que el resumen
- * (grupo → raza alfabética → categoría por n.º de clase **descendente** y sexo en empate → ejemplares por n.º catálogo descendente).
+ * Orden y agrupación del catálogo para PDF:
+ * Por **macro-sección** (ADULTOS → JÓVENES → VETERANOS → CACHORROS → CACHORROS ESPECIALES):
+ * en cada una se mantiene **grupo FCI → raza (alfabético) → categorías de esa sección** (orden fijo por `id_categoria`).
+ * Dentro de cada categoría, los ejemplares van **primero machos, luego hembras**; dentro de cada sexo,
+ * **el más adulto primero** (fecha de nacimiento más antigua). Desempate: n.º de catálogo descendente, luego `id_catalogo`.
  *
  * Los textos de raza para PDF: **trayectoria** = país desde `web.razas.id_pais` → `web.paises.pais` (`raza_trayectoria`);
  * **función** = `funcion`; **características** = `descripcion` (`raza_funcion`, `raza_descripcion`).
@@ -8,9 +11,21 @@
  */
 
 import dayjs from 'dayjs'
-import { formatTableDate } from './dateDisplay.js'
 
 /** @typedef {{ trayectoria?: string, procedencia?: string, funcion?: string, caracteristicas?: string }} CatalogoPdfRazaInfoLocal */
+
+/**
+ * Definición de bloques del PDF: `idsOrden` son `id_categoria` (`web.exposiciones_categorias`).
+ * Adultos: clases 5–8 y 9–12 (ids 5…12). Jóvenes: 3 y 15; 4 y 16 (el id 4 no repite en adultos).
+ * Ajustá estos arrays si tu seed de categorías difiere.
+ */
+export const PDF_MACRO_SECCIONES_CATALOGO = [
+  { titulo: 'ADULTOS', idsOrden: [5, 6, 7, 8, 9, 10, 11, 12] },
+  { titulo: 'JÓVENES', idsOrden: [3, 15, 4, 16] },
+  { titulo: 'VETERANOS', idsOrden: [13, 14] },
+  { titulo: 'CACHORROS', idsOrden: [1, 2] },
+  { titulo: 'CACHORROS ESPECIALES', idsOrden: [17, 18] },
+]
 
 /**
  * Entero positivo (p. ej. n.º FCI 1–10) → número romano. 0 o fuera de rango → ''.
@@ -45,12 +60,20 @@ export function enteroARomano(n) {
   return s
 }
 
-/** Subtítulo de página PDF: `Grupo I`, `Grupo II`, … o `Sin grupo`. */
-function subtituloGrupoPdf(idGrupo) {
-  const id = Number(idGrupo)
-  if (!Number.isFinite(id) || id <= 0) return "Sin grupo"
+/**
+ * Título de grupo FCI para el PDF («Grupo I», …) o etiqueta / Sin grupo.
+ * @param {{ id_grupo?: unknown, grupo_etiqueta?: unknown }} g
+ */
+function tituloGrupoFciParaPdf(g) {
+  const id = Number(g?.id_grupo)
+  if (!Number.isFinite(id) || id <= 0) {
+    const lab = String(g?.grupo_etiqueta ?? '').trim()
+    return lab || 'Sin grupo'
+  }
   const rom = enteroARomano(id)
-  return rom ? `Grupo ${rom}` : "Sin grupo"
+  if (rom) return `Grupo ${rom}`
+  const lab = String(g?.grupo_etiqueta ?? '').trim()
+  return lab || 'Sin grupo'
 }
 
 /** Sin número reconocible en la etiqueta → se ordena al final. */
@@ -132,6 +155,53 @@ export function compararCategoriaPorOrdinalEnNombre(a, b) {
 }
 
 /**
+ * Ejemplar (fila detalle): macho antes que hembra; dentro de cada sexo, **más adulto primero**
+ * (`fecha_nacimiento` más antigua). Sin fecha válida al final. Desempate: n.º catálogo desc., `id_catalogo` desc.
+ * @param {Record<string, unknown>} a
+ * @param {Record<string, unknown>} b
+ */
+export function compararEjemplarPdfMachoPrimeroMasAdultoPrimero(a, b) {
+  const sa = pesoSexoEjemplarFila(a)
+  const sb = pesoSexoEjemplarFila(b)
+  if (sa !== sb) return sa - sb
+
+  const fa = valorFechaNacimientoOrdenMasAdultoPrimero(a)
+  const fb = valorFechaNacimientoOrdenMasAdultoPrimero(b)
+  if (fa !== fb) return fa - fb
+
+  const na = a?.numero != null && a.numero !== '' ? Number(a.numero) : NaN
+  const nb = b?.numero != null && b.numero !== '' ? Number(b.numero) : NaN
+  const va = Number.isFinite(na) ? na : -Infinity
+  const vb = Number.isFinite(nb) ? nb : -Infinity
+  if (vb !== va) return vb - va
+
+  const ia = Number(a?.id_catalogo) || 0
+  const ib = Number(b?.id_catalogo) || 0
+  return ib - ia
+}
+
+/** @param {Record<string, unknown>} row @returns {number} 0 macho, 1 hembra, 2 otro */
+function pesoSexoEjemplarFila(row) {
+  const s = String(row?.sexo ?? '').trim().toUpperCase()
+  if (s === 'MACHO' || s === 'M') return 0
+  if (s === 'HEMBRA' || s === 'H') return 1
+  return 2
+}
+
+/**
+ * Valor numérico para orden ascendente: menor = más adulto. Sin fecha válida → +∞ (al final).
+ * @param {Record<string, unknown>} row
+ */
+function valorFechaNacimientoOrdenMasAdultoPrimero(row) {
+  const fn = row?.fecha_nacimiento
+  if (fn == null || String(fn).trim() === '') return Number.POSITIVE_INFINITY
+  const raw = String(fn).trim().slice(0, 10)
+  const d = dayjs(raw)
+  if (!d.isValid()) return Number.POSITIVE_INFINITY
+  return d.valueOf()
+}
+
+/**
  * Ejemplar: mayor n.º de catálogo primero; empate por id_catalogo descendente.
  * @param {Record<string, unknown>} a
  * @param {Record<string, unknown>} b
@@ -189,8 +259,9 @@ export function lineaEjemplarCatalogoPdfPorDefecto(row, opts = {}) {
     const nacTxt = d.isValid()
       ? `NAC: ${d.format('DD/MM/YY')}`
       : (() => {
-          const fd = formatTableDate(fnac)
-          return fd !== '—' ? `NAC: ${fd}` : ''
+          const s = String(fnac).trim()
+          if (!s || s === '—') return ''
+          return `NAC: ${s}`
         })()
     if (nacTxt) cuerpo.push(nacTxt)
   }
@@ -261,7 +332,147 @@ function mergeInfoRazaPdf(filaMuestra, idRaza, opciones) {
 }
 
 /**
- * Convierte filas del detalle de catálogo en páginas PDF (una página por grupo FCI).
+ * @param {Map<string, { id_grupo: number, grupo_etiqueta: string, razas: Map<string, { id_raza: number, etiqueta_raza: string, categorias: Map<string, { id_categoria: number, categoria_etiqueta: string, filas: Record<string, unknown>[] }> }> }>} porGrupo
+ * @param {Record<string, unknown>} row
+ */
+function insertarFilaEnPorGrupo(porGrupo, row) {
+  const r = row && typeof row === 'object' ? row : {}
+  const idG = Number(r.id_grupo)
+  const gKey = Number.isFinite(idG) ? idG : 0
+  const gLabel = String(r.grupo_etiqueta ?? 'Sin grupo').trim() || 'Sin grupo'
+  const idR = Number(r.id_raza)
+  const rKey = Number.isFinite(idR) ? idR : 0
+  const rLabel = String(r.raza ?? '—').trim() || '—'
+  const idC = Number(r.id_categoria)
+  const cKey = Number.isFinite(idC) ? idC : 0
+  const cLabel = String(r.categoria_etiqueta ?? '—').trim() || '—'
+
+  const gk = String(gKey)
+  if (!porGrupo.has(gk)) {
+    porGrupo.set(gk, {
+      id_grupo: gKey,
+      grupo_etiqueta: gLabel,
+      razas: new Map(),
+    })
+  }
+  const gNode = porGrupo.get(gk)
+  const rk = `raza-${rKey}-${rLabel}`
+  if (!gNode.razas.has(rk)) {
+    gNode.razas.set(rk, {
+      id_raza: rKey,
+      etiqueta_raza: rLabel,
+      categorias: new Map(),
+    })
+  }
+  const rNode = gNode.razas.get(rk)
+  const ck = String(cKey)
+  if (!rNode.categorias.has(ck)) {
+    rNode.categorias.set(ck, {
+      id_categoria: cKey,
+      categoria_etiqueta: cLabel,
+      filas: [],
+    })
+  }
+  rNode.categorias.get(ck).filas.push(r)
+}
+
+/**
+ * Ordena categorías según `idsOrden`; las no listadas quedan al final en orden de aparición.
+ * @param {Map<string, { id_categoria: number, categoria_etiqueta: string, filas: Record<string, unknown>[] }>} categoriasMap
+ * @param {number[]} idsOrden
+ */
+function categoriasEnOrdenPorIds(categoriasMap, idsOrden) {
+  const ordenados = []
+  const seen = new Set()
+  for (const id of idsOrden) {
+    const ck = String(id)
+    if (categoriasMap.has(ck)) {
+      ordenados.push(categoriasMap.get(ck))
+      seen.add(ck)
+    }
+  }
+  for (const [k, v] of categoriasMap) {
+    if (!seen.has(k)) ordenados.push(v)
+  }
+  return ordenados
+}
+
+/**
+ * Misma sucesión de filas que el PDF del catálogo (macro-sección → grupo → raza → categoría → ejemplares).
+ * Incluye al final las filas que no entraron en ninguna sección (p. ej. `id_categoria` inválido), por `id_catalogo`.
+ *
+ * @param {Record<string, unknown>[]} filas
+ * @returns {Record<string, unknown>[]}
+ */
+export function filasDetalleEnOrdenCatalogoPdf(filas) {
+  const arr = Array.isArray(filas) ? filas : []
+  const todosIdsAsignados = new Set(
+    PDF_MACRO_SECCIONES_CATALOGO.flatMap((s) => s.idsOrden),
+  )
+  /** @type {Record<string, unknown>[]} */
+  const out = []
+
+  /**
+   * @param {Record<string, unknown>[]} filasSubset
+   * @param {number[]} idsOrdenCategorias
+   * @param {boolean} ordenOrdinalFallback
+   */
+  function recolectar(filasSubset, idsOrdenCategorias, ordenOrdinalFallback) {
+    const porGrupo = new Map()
+    for (const row of filasSubset) {
+      insertarFilaEnPorGrupo(porGrupo, row)
+    }
+    const gruposOrdenados = [...porGrupo.values()].sort(compararGrupoResumen)
+    for (const g of gruposOrdenados) {
+      const razasArr = [...g.razas.values()].sort(compararRazaAlfabetico)
+      for (const rz of razasArr) {
+        const catsArr = ordenOrdinalFallback
+          ? [...rz.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
+          : categoriasEnOrdenPorIds(rz.categorias, idsOrdenCategorias)
+        for (const c of catsArr) {
+          const ordenadas = [...c.filas].sort(compararEjemplarPdfMachoPrimeroMasAdultoPrimero)
+          for (const fila of ordenadas) {
+            out.push(fila)
+          }
+        }
+      }
+    }
+  }
+
+  for (const sec of PDF_MACRO_SECCIONES_CATALOGO) {
+    const permitidos = new Set(sec.idsOrden)
+    const filasSec = arr.filter((row) => {
+      const id = Number(row.id_categoria)
+      return Number.isFinite(id) && permitidos.has(id)
+    })
+    if (filasSec.length === 0) continue
+    recolectar(filasSec, sec.idsOrden, false)
+  }
+
+  const filasOtros = arr.filter((row) => {
+    const id = Number(row.id_categoria)
+    return Number.isFinite(id) && !todosIdsAsignados.has(id)
+  })
+  if (filasOtros.length > 0) {
+    recolectar(filasOtros, [], true)
+  }
+
+  const seen = new Set(
+    out.map((r) => Number(r.id_catalogo)).filter((n) => Number.isFinite(n)),
+  )
+  const rest = arr.filter((r) => {
+    const idc = Number(r.id_catalogo)
+    return Number.isFinite(idc) && !seen.has(idc)
+  })
+  rest.sort((a, b) => (Number(a.id_catalogo) || 0) - (Number(b.id_catalogo) || 0))
+  out.push(...rest)
+
+  return out
+}
+
+/**
+ * Convierte filas del detalle de catálogo en páginas PDF (una hoja **por macro-sección**:
+ * ADULTOS, JÓVENES, VETERANOS, CACHORROS, CACHORROS ESPECIALES; al final **OTRAS CATEGORÍAS** si hay ids fuera de lista).
  *
  * @param {Record<string, unknown>[]} filas
  * @param {{
@@ -269,7 +480,7 @@ function mergeInfoRazaPdf(filaMuestra, idRaza, opciones) {
  *   incluirPrefijoNumeroCatalogoEjemplar?: boolean,
  *   infoRazaPorIdRaza?: Map<number, CatalogoPdfRazaInfoLocal> | Record<string, CatalogoPdfRazaInfoLocal>,
  *   lineaEjemplar?: (row: Record<string, unknown>) => string,
- * }} [opciones] Sin `tituloPrincipal` la hoja arranca en «GRUPO …». `incluirPrefijoNumeroCatalogoEjemplar: false` omite n.º en ejemplar (torneo abierto).
+ * }} [opciones] `incluirPrefijoNumeroCatalogoEjemplar: false` omite n.º en ejemplar (torneo abierto).
  * @returns {import('./exportCatalogoPdf.js').CatalogoPdfPagina[]}
  */
 export function filasDetalleAPaginasPdf(filas, opciones = {}) {
@@ -286,96 +497,114 @@ export function filasDetalleAPaginasPdf(filas, opciones = {}) {
           })
   const arr = Array.isArray(filas) ? filas : []
 
-  /** @type {Map<string, { id_grupo: number, grupo_etiqueta: string, razas: Map<string, { id_raza: number, etiqueta_raza: string, categorias: Map<string, { id_categoria: number, categoria_etiqueta: string, filas: Record<string, unknown>[] }> }> }>} */
-  const porGrupo = new Map()
-
-  for (const row of arr) {
-    const r = row && typeof row === 'object' ? row : {}
-    const idG = Number(r.id_grupo)
-    const gKey = Number.isFinite(idG) ? idG : 0
-    const gLabel = String(r.grupo_etiqueta ?? 'Sin grupo').trim() || 'Sin grupo'
-    const idR = Number(r.id_raza)
-    const rKey = Number.isFinite(idR) ? idR : 0
-    const rLabel = String(r.raza ?? '—').trim() || '—'
-    const idC = Number(r.id_categoria)
-    const cKey = Number.isFinite(idC) ? idC : 0
-    const cLabel = String(r.categoria_etiqueta ?? '—').trim() || '—'
-
-    const gk = String(gKey)
-    if (!porGrupo.has(gk)) {
-      porGrupo.set(gk, {
-        id_grupo: gKey,
-        grupo_etiqueta: gLabel,
-        razas: new Map(),
-      })
-    }
-    const gNode = porGrupo.get(gk)
-    const rk = `raza-${rKey}-${rLabel}`
-    if (!gNode.razas.has(rk)) {
-      gNode.razas.set(rk, {
-        id_raza: rKey,
-        etiqueta_raza: rLabel,
-        categorias: new Map(),
-      })
-    }
-    const rNode = gNode.razas.get(rk)
-    const ck = String(cKey)
-    if (!rNode.categorias.has(ck)) {
-      rNode.categorias.set(ck, {
-        id_categoria: cKey,
-        categoria_etiqueta: cLabel,
-        filas: [],
-      })
-    }
-    rNode.categorias.get(ck).filas.push(r)
-  }
-
-  const gruposOrdenados = [...porGrupo.values()].sort(compararGrupoResumen)
+  const todosIdsAsignados = new Set(
+    PDF_MACRO_SECCIONES_CATALOGO.flatMap((s) => s.idsOrden),
+  )
 
   /** @type {import('./exportCatalogoPdf.js').CatalogoPdfPagina[]} */
   const paginas = []
   let nPag = 0
 
-  for (const g of gruposOrdenados) {
-    const razasArr = [...g.razas.values()].sort(compararRazaAlfabetico)
+  /**
+   * @param {Record<string, unknown>[]} filasSubset
+   * @param {number[]} idsOrdenCategorias
+   * @param {boolean} ordenOrdinalFallback
+   * @returns {import('./exportCatalogoPdf.js').CatalogoPdfBloqueGrupo[]}
+   */
+  function bloquesGrupoRazasDesdeFilas(
+    filasSubset,
+    idsOrdenCategorias,
+    ordenOrdinalFallback,
+  ) {
+    const porGrupo = new Map()
+    for (const row of filasSubset) {
+      insertarFilaEnPorGrupo(porGrupo, row)
+    }
+    const gruposOrdenados = [...porGrupo.values()].sort(compararGrupoResumen)
+    /** @type {import('./exportCatalogoPdf.js').CatalogoPdfBloqueGrupo[]} */
+    const bloquesGrupo = []
 
-    /** @type {import('./exportCatalogoPdf.js').CatalogoPdfSeccionRaza[]} */
-    const secciones = []
+    for (const g of gruposOrdenados) {
+      const razasArr = [...g.razas.values()].sort(compararRazaAlfabetico)
+      /** @type {import('./exportCatalogoPdf.js').CatalogoPdfSeccionRaza[]} */
+      const seccionesGrupo = []
 
-    for (const rz of razasArr) {
-      const catsArr = [...rz.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
+      for (const rz of razasArr) {
+        const catsArr = ordenOrdinalFallback
+          ? [...rz.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
+          : categoriasEnOrdenPorIds(rz.categorias, idsOrdenCategorias)
 
-      /** @type {import('./exportCatalogoPdf.js').CatalogoPdfCategoriaBloque[]} */
-      const categorias = []
-      for (const c of catsArr) {
-        const ordenadas = [...c.filas].sort(compararEjemplarNumeroCatalogoDesc)
-        const lineas = ordenadas.map((fila) => lineaEjemplar(fila)).filter((s) => String(s).trim() !== '')
-        const etiqueta = c.categoria_etiqueta
-          ? `CATEGORIA: ${c.categoria_etiqueta}`
-          : 'CATEGORIA: —'
-        categorias.push({ etiqueta, lineas })
+        /** @type {import('./exportCatalogoPdf.js').CatalogoPdfCategoriaBloque[]} */
+        const categorias = []
+        for (const c of catsArr) {
+          const ordenadas = [...c.filas].sort(compararEjemplarPdfMachoPrimeroMasAdultoPrimero)
+          const lineas = ordenadas
+            .map((fila) => lineaEjemplar(fila))
+            .filter((s) => String(s).trim() !== '')
+          const etiqueta = c.categoria_etiqueta
+            ? `CATEGORIA: ${c.categoria_etiqueta}`
+            : 'CATEGORIA: —'
+          categorias.push({ etiqueta, lineas })
+        }
+
+        const filaMuestra =
+          catsArr.length > 0 && catsArr[0].filas.length > 0
+            ? catsArr[0].filas[0]
+            : undefined
+        const info = mergeInfoRazaPdf(filaMuestra, rz.id_raza, opciones)
+
+        seccionesGrupo.push({
+          nombreRaza: rz.etiqueta_raza,
+          info,
+          categorias,
+        })
       }
 
-      const filaMuestra =
-        catsArr.length > 0 && catsArr[0].filas.length > 0
-          ? catsArr[0].filas[0]
-          : undefined
-      const info = mergeInfoRazaPdf(filaMuestra, rz.id_raza, opciones)
-
-      secciones.push({
-        nombreRaza: rz.etiqueta_raza,
-        info,
-        categorias,
-      })
+      if (seccionesGrupo.length > 0) {
+        bloquesGrupo.push({
+          tituloGrupo: tituloGrupoFciParaPdf(g),
+          secciones: seccionesGrupo,
+        })
+      }
     }
+    return bloquesGrupo
+  }
+
+  for (const sec of PDF_MACRO_SECCIONES_CATALOGO) {
+    const permitidos = new Set(sec.idsOrden)
+    const filasSec = arr.filter((row) => {
+      const id = Number(row.id_categoria)
+      return Number.isFinite(id) && permitidos.has(id)
+    })
+    if (filasSec.length === 0) continue
+
+    const grupos = bloquesGrupoRazasDesdeFilas(filasSec, sec.idsOrden, false)
+    if (grupos.length === 0) continue
 
     nPag += 1
     paginas.push({
       titulo: tituloPrincipal,
-      subtitulo: subtituloGrupoPdf(g.id_grupo),
-      secciones,
+      subtitulo: sec.titulo,
+      grupos,
       numeroPagina: nPag,
     })
+  }
+
+  const filasOtros = arr.filter((row) => {
+    const id = Number(row.id_categoria)
+    return Number.isFinite(id) && !todosIdsAsignados.has(id)
+  })
+  if (filasOtros.length > 0) {
+    const grupos = bloquesGrupoRazasDesdeFilas(filasOtros, [], true)
+    if (grupos.length > 0) {
+      nPag += 1
+      paginas.push({
+        titulo: tituloPrincipal,
+        subtitulo: 'OTRAS CATEGORÍAS',
+        grupos,
+        numeroPagina: nPag,
+      })
+    }
   }
 
   return paginas

@@ -131,6 +131,7 @@ function etiquetaRaza(r) {
  *   catalogosCargando?: boolean,
  *   catalogosError?: string | null,
  *   catalogoDetalleFilas?: Record<string, unknown>[] | null,
+ *   onCerrarTorneoYNumerar?: () => Promise<void>,
  * }} props
  */
 export function VistaAnotacionExposicion({
@@ -141,6 +142,7 @@ export function VistaAnotacionExposicion({
   onAddEnrollment,
   onUpdateEnrollment,
   onRemoveEnrollment,
+  onCerrarTorneoYNumerar,
   catalogosCargando = false,
   catalogosError = null,
 }) {
@@ -151,6 +153,7 @@ export function VistaAnotacionExposicion({
   const editCategoriaTitleId = useId()
   const editCategoriaErrorId = useId()
   const eliminarEjemplarTitleId = useId()
+  const confirmarCerrarNumerarTitleId = useId()
   const [idFederacion, setIdFederacion] = useState('')
   const [idRaza, setIdRaza] = useState('')
   const [textoBusqFederacion, setTextoBusqFederacion] = useState('')
@@ -177,6 +180,7 @@ export function VistaAnotacionExposicion({
   const [categoriaTarjetaError, setCategoriaTarjetaError] = useState(
     /** @type {string | null} */ (null),
   )
+  const [numeroTarjeta, setNumeroTarjeta] = useState('')
   const [editCategoriaIndex, setEditCategoriaIndex] = useState(/** @type {number | null} */ (null))
   const [editCategoriaEjemplar, setEditCategoriaEjemplar] = useState(
     /** @type {Record<string, unknown> | null} */ (null),
@@ -185,11 +189,14 @@ export function VistaAnotacionExposicion({
   const [categoriaEdicionError, setCategoriaEdicionError] = useState(
     /** @type {string | null} */ (null),
   )
+  const [numeroEdicion, setNumeroEdicion] = useState('')
   const [editCategoriaCargando, setEditCategoriaCargando] = useState(false)
   const [eliminarEjemplarIndex, setEliminarEjemplarIndex] = useState(
     /** @type {number | null} */ (null),
   )
   const [pdfPreparando, setPdfPreparando] = useState(false)
+  const [cerrarNumerarLoading, setCerrarNumerarLoading] = useState(false)
+  const [confirmarCerrarNumerarOpen, setConfirmarCerrarNumerarOpen] = useState(false)
 
   const [filtroTablaRaza, setFiltroTablaRaza] = useState('')
   const [textoFiltroTablaRaza, setTextoFiltroTablaRaza] = useState('')
@@ -231,12 +238,22 @@ export function VistaAnotacionExposicion({
     [enrollments],
   )
 
+  const numeracionManual = useMemo(
+    () =>
+      Number(/** @type {{ tipo_numeracion?: unknown }} */ (exhibition).tipo_numeracion) === 1,
+    [exhibition],
+  )
+
   const razaItemsTabla = useMemo(() => {
+    const g = String(filtroTablaGrupo ?? '').trim()
+    const rows = g
+      ? enrollments.filter((e) => String(e.grupo ?? '').trim() === g)
+      : []
     const vals = [
-      ...new Set(enrollments.map((e) => String(e.raza ?? '').trim()).filter(Boolean)),
+      ...new Set(rows.map((e) => String(e.raza ?? '').trim()).filter(Boolean)),
     ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
     return vals.map((label) => ({ id: label, label }))
-  }, [enrollments])
+  }, [enrollments, filtroTablaGrupo])
 
   const grupoItemsTabla = useMemo(() => {
     const vals = [
@@ -271,6 +288,19 @@ export function VistaAnotacionExposicion({
         return true
       })
   }, [enrollments, filtroTablaRaza, filtroTablaGrupo, filtroTablaCategoria])
+
+  useEffect(() => {
+    if (!String(filtroTablaGrupo ?? '').trim()) {
+      setFiltroTablaRaza('')
+      setTextoFiltroTablaRaza('')
+      return
+    }
+    const allowed = new Set(razaItemsTabla.map((x) => x.id))
+    if (filtroTablaRaza && !allowed.has(filtroTablaRaza)) {
+      setFiltroTablaRaza('')
+      setTextoFiltroTablaRaza('')
+    }
+  }, [filtroTablaGrupo, filtroTablaRaza, razaItemsTabla])
 
   const filaEdicionCategoria = useMemo(() => {
     if (editCategoriaIndex == null) return null
@@ -340,9 +370,13 @@ export function VistaAnotacionExposicion({
     if (!tarjetaEjemplar) {
       setCategoriaSeleccionTarjeta('')
       setCategoriaTarjetaError(null)
+      setNumeroTarjeta('')
       return
     }
     setCategoriaTarjetaError(null)
+    if (numeracionManual) {
+      setNumeroTarjeta('')
+    }
     if (categoriasElegiblesTarjeta.length === 1) {
       const lab = etiquetaInscripcionCategoria(
         /** @type {Record<string, unknown>} */ (categoriasElegiblesTarjeta[0]),
@@ -351,7 +385,7 @@ export function VistaAnotacionExposicion({
     } else {
       setCategoriaSeleccionTarjeta('')
     }
-  }, [tarjetaEjemplar, categoriasElegiblesTarjeta])
+  }, [tarjetaEjemplar, categoriasElegiblesTarjeta, numeracionManual])
 
   useEffect(() => {
     if (!tarjetaEjemplar) return
@@ -566,11 +600,37 @@ export function VistaAnotacionExposicion({
       setCategoriaTarjetaError('No se pudo resolver el id de categoría.')
       return
     }
+
+    /** @type {number | null} */
+    let numeroAsignar = null
+    if (numeracionManual) {
+      const n = parseInt(String(numeroTarjeta).trim(), 10)
+      if (!Number.isFinite(n) || n < 1) {
+        setCategoriaTarjetaError('Indicá un número de catálogo entero ≥ 1.')
+        return
+      }
+      const dup = enrollments.some((e) => {
+        const en = e.numero
+        return (
+          en != null &&
+          en !== '' &&
+          Number.isFinite(Number(en)) &&
+          Number(en) === n
+        )
+      })
+      if (dup) {
+        setCategoriaTarjetaError('Ese número ya está asignado en esta exposición.')
+        return
+      }
+      numeroAsignar = n
+    }
+
     onAddEnrollment(
       ejemplarBusquedaApiToEnrollment(row, {
         categoria,
         username: session.username,
         id_categoria: idCat,
+        ...(numeroAsignar != null ? { numero: numeroAsignar } : {}),
       }),
     )
     setTarjetaEjemplar(null)
@@ -682,6 +742,12 @@ export function VistaAnotacionExposicion({
     setEditCategoriaIndex(i)
     setCategoriaEditEtiqueta(String(fila.categoria ?? ''))
     setCategoriaEdicionError(null)
+    const nr = /** @type {{ numero?: unknown }} */ (fila).numero
+    const numStr =
+      nr != null && nr !== '' && Number.isFinite(Number(nr))
+        ? String(Math.trunc(Number(nr)))
+        : String(/** @type {{ ordinal?: unknown }} */ (fila).ordinal ?? '').trim()
+    setNumeroEdicion(numStr)
     setEditCategoriaEjemplar(null)
     setEditCategoriaCargando(true)
     const idEj = Number(fila['id ejemplar'])
@@ -711,6 +777,7 @@ export function VistaAnotacionExposicion({
     setEditCategoriaEjemplar(null)
     setCategoriaEdicionError(null)
     setCategoriaEditEtiqueta('')
+    setNumeroEdicion('')
   }
 
   function guardarEdicionCategoria() {
@@ -734,11 +801,41 @@ export function VistaAnotacionExposicion({
       setCategoriaEdicionError('Categoría no válida para este ejemplar.')
       return
     }
-    onUpdateEnrollment(editCategoriaIndex, {
+
+    if (numeracionManual) {
+      const n = parseInt(String(numeroEdicion).trim(), 10)
+      if (!Number.isFinite(n) || n < 1) {
+        setCategoriaEdicionError('Indicá un número de catálogo entero ≥ 1.')
+        return
+      }
+      const dup = enrollments.some((e, idx) => {
+        if (idx === editCategoriaIndex) return false
+        const en = e.numero
+        return (
+          en != null &&
+          en !== '' &&
+          Number.isFinite(Number(en)) &&
+          Number(en) === n
+        )
+      })
+      if (dup) {
+        setCategoriaEdicionError('Ese número ya está asignado en esta exposición.')
+        return
+      }
+    }
+
+    /** @type {Record<string, unknown>} */
+    const patch = {
       ...filaEdicionCategoria,
       categoria: t,
       id_categoria: idCat,
-    })
+    }
+    if (numeracionManual) {
+      const n = parseInt(String(numeroEdicion).trim(), 10)
+      patch.numero = n
+      patch.ordinal = String(n)
+    }
+    onUpdateEnrollment(editCategoriaIndex, patch)
     cerrarEdicionCategoria()
   }
 
@@ -782,6 +879,34 @@ export function VistaAnotacionExposicion({
       .catch(() => {
         window.alert('No se pudo cargar la exportación a Excel. Reintentá o actualizá la página.')
       })
+  }
+
+  function handleCerrarTorneoYNumerarClick() {
+    if (onCerrarTorneoYNumerar == null) return
+    if (
+      catalogosCargando ||
+      catalogosError != null ||
+      enrollments.length === 0 ||
+      idExposicion == null
+    ) {
+      return
+    }
+    setConfirmarCerrarNumerarOpen(true)
+  }
+
+  function cerrarConfirmarCerrarNumerar() {
+    setConfirmarCerrarNumerarOpen(false)
+  }
+
+  async function ejecutarConfirmarCerrarTorneoYNumerar() {
+    if (onCerrarTorneoYNumerar == null) return
+    setConfirmarCerrarNumerarOpen(false)
+    setCerrarNumerarLoading(true)
+    try {
+      await onCerrarTorneoYNumerar()
+    } finally {
+      setCerrarNumerarLoading(false)
+    }
   }
 
   async function handleVistaPreviaCatalogoPdf() {
@@ -907,6 +1032,26 @@ export function VistaAnotacionExposicion({
                   })}
                 </select>
               </label>
+              {numeracionManual ? (
+                <label className="enrollment-modal__field anotacion-tarjeta-card__numero-fila">
+                  <span className="anotacion-tarjeta-card__numero-tag">N.º:</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="enrollment-modal__input enrollment-modal__input--compact anotacion-tarjeta-card__numero-input"
+                    value={numeroTarjeta}
+                    onChange={(e) => {
+                      setNumeroTarjeta(e.target.value.replace(/\D/g, ''))
+                      setCategoriaTarjetaError(null)
+                    }}
+                    disabled={sinEdad || categoriasElegiblesTarjeta.length === 0}
+                    autoComplete="off"
+                    aria-label="Número de catálogo"
+                    placeholder="Ej. 12"
+                  />
+                </label>
+              ) : null}
               {sinEdad ? (
                 <p className="anotacion-tarjeta-card__hint-warning">
                   Sin fecha de nacimiento no se puede determinar la categoría.
@@ -1049,6 +1194,26 @@ export function VistaAnotacionExposicion({
                   })}
                 </select>
               </label>
+              {numeracionManual ? (
+                <label className="enrollment-modal__field anotacion-tarjeta-card__numero-fila">
+                  <span className="anotacion-tarjeta-card__numero-tag">N.º:</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="enrollment-modal__input enrollment-modal__input--compact anotacion-tarjeta-card__numero-input"
+                    value={numeroEdicion}
+                    onChange={(e) => {
+                      setNumeroEdicion(e.target.value.replace(/\D/g, ''))
+                      setCategoriaEdicionError(null)
+                    }}
+                    disabled={sinEdad || sinCategorias}
+                    autoComplete="off"
+                    aria-label="Número de catálogo"
+                    placeholder="Ej. 12"
+                  />
+                </label>
+              ) : null}
               {sinEdad ? (
                 <p className="anotacion-tarjeta-card__hint-warning">
                   Sin fecha de nacimiento no se puede determinar la categoría.
@@ -1142,6 +1307,52 @@ export function VistaAnotacionExposicion({
               onClick={confirmarEliminarEjemplar}
             >
               Dar de baja
+            </button>
+          </footer>
+        </div>
+      </div>
+    )
+  }
+
+  function renderConfirmarCerrarNumerarModal() {
+    if (!confirmarCerrarNumerarOpen || onCerrarTorneoYNumerar == null) return null
+    const abierto = esExposicionEstadoAbierto(exhibition)
+    const prompt = abierto
+      ? '¿Cerrar el torneo y asignar los números de catálogo en orden automático? Los números siguen el mismo orden que el PDF del catálogo.'
+      : '¿Volver a asignar los números de catálogo según el orden del PDF?'
+    const accionPrimaria = abierto ? 'Cerrar torneo y numerar' : 'Actualizar numeración'
+    return (
+      <div
+        className="anotacion-eliminar-overlay"
+        role="presentation"
+        onClick={cerrarConfirmarCerrarNumerar}
+      >
+        <div
+          className="anotacion-tarjeta-dialog anotacion-eliminar-dialog anotacion-confirmar-cerrar-numerar-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={confirmarCerrarNumerarTitleId}
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <header className="anotacion-tarjeta-dialog__header">
+            <p id={confirmarCerrarNumerarTitleId} className="anotacion-eliminar-dialog__prompt">
+              {prompt}
+            </p>
+          </header>
+          <footer className="anotacion-tarjeta-dialog__footer">
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--secondary"
+              onClick={cerrarConfirmarCerrarNumerar}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="enrollment-modal__btn enrollment-modal__btn--primary"
+              onClick={() => void ejecutarConfirmarCerrarTorneoYNumerar()}
+            >
+              {accionPrimaria}
             </button>
           </footer>
         </div>
@@ -1519,11 +1730,37 @@ export function VistaAnotacionExposicion({
       {renderTarjetaEjemplarOverlay()}
       {renderEdicionCategoriaModal()}
       {renderEliminarEjemplarModal()}
+      {renderConfirmarCerrarNumerarModal()}
 
       <section className="enrollment-modal__section enrollment-modal__section--table">
         <div className="enrollment-modal__section-head--table">
           <h3 className="enrollment-modal__section-title">Ejemplares anotados</h3>
           <div className="enrollment-modal__section-actions">
+            {onCerrarTorneoYNumerar ? (
+              <button
+                type="button"
+                className="enrollment-modal__btn enrollment-modal__btn--primary"
+                onClick={() => void handleCerrarTorneoYNumerarClick()}
+                disabled={
+                  catalogosCargando ||
+                  cerrarNumerarLoading ||
+                  catalogosError != null ||
+                  enrollments.length === 0 ||
+                  idExposicion == null
+                }
+                title={
+                  esExposicionEstadoAbierto(exhibition)
+                    ? 'Cierra el torneo y asigna los n.º de catálogo en el orden del PDF (ADULTOS → grupos → razas → categorías → ejemplares, etc.)'
+                    : 'Vuelve a calcular los n.º de catálogo según el orden del PDF'
+                }
+              >
+                {cerrarNumerarLoading
+                  ? 'Procesando…'
+                  : esExposicionEstadoAbierto(exhibition)
+                    ? 'Cerrar torneo y numerar'
+                    : 'Actualizar numeración'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact"
@@ -1553,27 +1790,10 @@ export function VistaAnotacionExposicion({
         <div
           className="enrollment-modal__table-filters anotacion-tabla-filtros"
           role="search"
-          aria-label="Filtrar ejemplares anotados por raza, grupo o categoría"
+          aria-label="Filtrar ejemplares anotados por grupo, raza o categoría"
         >
           <p className="enrollment-modal__table-filters-label">Filtrar tabla</p>
           <div className="enrollment-modal__table-filters-fields">
-            <label className="enrollment-modal__field">
-              <span className="enrollment-modal__field-label">Raza</span>
-              <BusquedaSelectTipo
-                items={razaItemsTabla}
-                getId={(x) => /** @type {{ id: string }} */ (x).id}
-                getLabel={(x) => /** @type {{ label: string }} */ (x).label}
-                valueId={filtroTablaRaza}
-                inputText={textoFiltroTablaRaza}
-                onValueIdChange={setFiltroTablaRaza}
-                onInputTextChange={setTextoFiltroTablaRaza}
-                aria-label="Filtrar por raza (como en la búsqueda de arriba)"
-                placeholder="Todas"
-                className="enrollment-modal__input enrollment-modal__input--compact"
-                scopeSelector=".anotacion-tabla-filtros"
-                disabled={tablaFiltrosDeshabilitados}
-              />
-            </label>
             <label className="enrollment-modal__field">
               <span className="enrollment-modal__field-label">Grupo</span>
               <BusquedaSelectTipo
@@ -1584,11 +1804,32 @@ export function VistaAnotacionExposicion({
                 inputText={textoFiltroTablaGrupo}
                 onValueIdChange={setFiltroTablaGrupo}
                 onInputTextChange={setTextoFiltroTablaGrupo}
-                aria-label="Filtrar por grupo FCI"
+                aria-label="Filtrar por grupo FCI (elegir primero para filtrar por raza)"
                 placeholder="Todos"
                 className="enrollment-modal__input enrollment-modal__input--compact"
                 scopeSelector=".anotacion-tabla-filtros"
                 disabled={tablaFiltrosDeshabilitados}
+              />
+            </label>
+            <label className="enrollment-modal__field">
+              <span className="enrollment-modal__field-label">Raza</span>
+              <BusquedaSelectTipo
+                items={razaItemsTabla}
+                getId={(x) => /** @type {{ id: string }} */ (x).id}
+                getLabel={(x) => /** @type {{ label: string }} */ (x).label}
+                valueId={filtroTablaRaza}
+                inputText={textoFiltroTablaRaza}
+                onValueIdChange={setFiltroTablaRaza}
+                onInputTextChange={setTextoFiltroTablaRaza}
+                aria-label="Filtrar por raza del grupo elegido"
+                placeholder={
+                  String(filtroTablaGrupo ?? '').trim() ? 'Todas' : 'Elegí un grupo'
+                }
+                className="enrollment-modal__input enrollment-modal__input--compact"
+                scopeSelector=".anotacion-tabla-filtros"
+                disabled={
+                  tablaFiltrosDeshabilitados || !String(filtroTablaGrupo ?? '').trim()
+                }
               />
             </label>
             <label className="enrollment-modal__field">
@@ -1686,9 +1927,7 @@ export function VistaAnotacionExposicion({
                               : undefined
                           }
                         >
-                          {col === 'numero'
-                            ? ''
-                            : textoCeldaInscripcion(row[col])}
+                          {textoCeldaInscripcion(row[col])}
                         </td>
                       ))}
                       <td className="enrollment-modal__td-actions">

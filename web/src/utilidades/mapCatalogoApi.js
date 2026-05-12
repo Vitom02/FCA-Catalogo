@@ -19,6 +19,28 @@ export function idCategoriaFromEtiqueta(categoriasApi, etiqueta) {
 }
 
 /**
+ * Orden ascendente por n.º de catálogo (`numero`); filas sin número al final; desempate `id_catalogo`.
+ * @param {Record<string, unknown>[]} rows
+ * @returns {Record<string, unknown>[]}
+ */
+export function sortCatalogoDetallePorNumeroCatalogo(rows) {
+  const arr = Array.isArray(rows) ? rows : []
+  return [...arr].sort((a, b) => {
+    const na = Number(a.numero)
+    const nb = Number(b.numero)
+    const fa = Number.isFinite(na) && na >= 1 ? Math.trunc(na) : null
+    const fb = Number.isFinite(nb) && nb >= 1 ? Math.trunc(nb) : null
+    if (fa == null && fb == null) {
+      return (Number(a.id_catalogo) || 0) - (Number(b.id_catalogo) || 0)
+    }
+    if (fa == null) return 1
+    if (fb == null) return -1
+    if (fa !== fb) return fa - fb
+    return (Number(a.id_catalogo) || 0) - (Number(b.id_catalogo) || 0)
+  })
+}
+
+/**
  * Fila de `GET /api/catalogos/exposicion/:id/detalle` → fila de tabla de anotados.
  * @param {Record<string, unknown>} row
  */

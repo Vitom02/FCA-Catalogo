@@ -13,7 +13,7 @@ export function normalizeSexoEjemplarApi(raw) {
 /**
  * Fila de `GET /api/ejemplares` → fila de inscripción en tabla de anotados.
  * @param {Record<string, unknown>} row
- * @param {{ ordinal?: number | string, categoria: string, username: string, id_categoria?: number | null }} ctx
+ * @param {{ ordinal?: number | string, categoria: string, username: string, id_categoria?: number | null, numero?: number | string }} ctx
  */
 export function ejemplarBusquedaApiToEnrollment(row, ctx) {
   const reg = row.registro
@@ -35,11 +35,19 @@ export function ejemplarBusquedaApiToEnrollment(row, ctx) {
         : '',
     categoria: ctx.categoria,
     raza: row.raza != null && String(row.raza).trim() !== '' ? String(row.raza) : '',
-    /** `c.numero` en API; sin asignar hasta definir correlativo. */
+    /** `c.numero` en API; se asigna en numeración manual desde la tarjeta. */
     numero: '',
     ordinal: ord,
     registro: reg != null && reg !== '' ? String(reg) : '',
     usuario: ctx.username,
+  }
+  if (ctx.numero != null && ctx.numero !== '') {
+    const n = Number(ctx.numero)
+    if (Number.isFinite(n) && n >= 1) {
+      const nt = Math.trunc(n)
+      out.numero = nt
+      out.ordinal = String(nt)
+    }
   }
   if (ctx.id_categoria != null && Number.isFinite(Number(ctx.id_categoria))) {
     Object.assign(out, { id_categoria: Number(ctx.id_categoria) })

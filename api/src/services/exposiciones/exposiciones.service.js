@@ -1,4 +1,5 @@
 import { query } from "../../database/index.js";
+import { aplicarNumeracionAutomaticaPorOrdenPdf } from "../catalogos/catalogos.service.js";
 
 /** Coinciden con web.exposiciones_estados (migración). */
 const ID_ESTADO_ABIERTO = 1;
@@ -26,6 +27,7 @@ const COLUMNS = [
   "cantidad",
   "numeros_extra_razas",
   "numeros_extra_cachorros",
+  "tipo_numeracion",
 ];
 
 const COLUMNAS_ENTERAS_OPCIONALES = new Set([
@@ -73,6 +75,7 @@ const SELECT_BASE = `
     e.cantidad,
     e.numeros_extra_razas,
     e.numeros_extra_cachorros,
+    e.tipo_numeracion,
     e.cerrado_manual,
     cl.club AS club
   FROM exposiciones e
@@ -93,6 +96,19 @@ const SELECT_BASE = `
  * **Sin club**: vigente → Abierto; post `hasta` → Finalizado.
  */
 export async function aplicarReglasEstadoPorClubOrganizador() {
+  const before = await query(
+    `SELECT id_exposicion, id_estado, tipo_numeracion FROM exposiciones`
+  );
+  const beforeMap = new Map(
+    before.rows.map((r) => [
+      Number(r.id_exposicion),
+      {
+        id_estado: Number(r.id_estado),
+        tipo_numeracion: Number(r.tipo_numeracion),
+      },
+    ])
+  );
+
   await query(
     `WITH e2 AS (
         SELECT
@@ -177,6 +193,26 @@ export async function aplicarReglasEstadoPorClubOrganizador() {
         )`,
     [ID_ESTADO_ABIERTO, ID_ESTADO_CERRADO, ID_ESTADO_FINALIZADO]
   );
+
+  const after = await query(`SELECT id_exposicion, id_estado FROM exposiciones`);
+  for (const row of after.rows) {
+    const idExpo = Number(row.id_exposicion);
+    const prev = beforeMap.get(idExpo);
+    if (!prev) continue;
+    const prevEst = prev.id_estado;
+    const nowEst = Number(row.id_estado);
+    if (prevEst !== ID_ESTADO_ABIERTO) continue;
+    if (nowEst !== ID_ESTADO_CERRADO && nowEst !== ID_ESTADO_FINALIZADO) continue;
+    if (Number(prev.tipo_numeracion) !== 2) continue;
+    try {
+      await aplicarNumeracionAutomaticaPorOrdenPdf(idExpo);
+    } catch (err) {
+      console.error(
+        `[exposiciones] numeración automática al cerrar: id_exposicion=${idExpo}`,
+        err
+      );
+    }
+  }
 }
 
 function formatPgDate(value) {
@@ -284,6 +320,21 @@ function parseIdClubObligatorio(v) {
   return n;
 }
 
+/** 1 = manual, 2 = automática. Por omisión: automática. */
+function parseTipoNumeracionCreacion(v) {
+  const n = Number(v);
+  if (n === 1 || n === 2) return n;
+  return 2;
+}
+
+function parseTipoNumeracionActualizacion(v) {
+  const n = Number(v);
+  if (n === 1 || n === 2) return n;
+  const err = new Error("tipo_numeracion debe ser 1 (manual) o 2 (automática)");
+  err.code = "EXPO_TIPO_NUMERACION_INVALIDO";
+  throw err;
+}
+
 export async function crear(payload) {
   const {
     exposicion,
@@ -305,6 +356,7 @@ export async function crear(payload) {
     cantidad,
     numeros_extra_razas,
     numeros_extra_cachorros,
+    tipo_numeracion,
   } = payload;
 
   const idClub = parseIdClubObligatorio(id_club);
@@ -314,17 +366,21 @@ export async function crear(payload) {
     throw err;
   }
 
+  const tipoNum = parseTipoNumeracionCreacion(tipo_numeracion);
+
   const r = await query(
     `INSERT INTO exposiciones (
       exposicion, desde, hasta, id_club, id_tipo, ano, id_mes,
       organizador, texto1, texto2, texto3, texto4, texto5,
       latitud, longitud, ubicacion,
-      cantidad, numeros_extra_razas, numeros_extra_cachorros
+      cantidad, numeros_extra_razas, numeros_extra_cachorros,
+      tipo_numeracion
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7,
       $8, $9, $10, $11, $12, $13,
       $14, $15, $16,
-      $17, $18, $19
+      $17, $18, $19,
+      $20
     )
     RETURNING id_exposicion`,
     [
@@ -347,6 +403,7 @@ export async function crear(payload) {
       optIntNullable(cantidad),
       optIntNullable(numeros_extra_razas),
       optIntNullable(numeros_extra_cachorros),
+      tipoNum,
     ]
   );
   await aplicarReglasEstadoPorClubOrganizador();
@@ -368,7 +425,9 @@ export async function actualizar(idExposicion, payload) {
     }
     updates.push(`${col} = $${i}`);
     let v = payload[col];
-    if (COLUMNAS_ENTERAS_OPCIONALES.has(col)) {
+    if (col === "tipo_numeracion") {
+      v = parseTipoNumeracionActualizacion(v);
+    } else if (COLUMNAS_ENTERAS_OPCIONALES.has(col)) {
       v = optIntNullable(v);
     } else if (COLUMNAS_TEXTO_NOT_NULL_LEGACY.has(col)) {
       v = strNotNull(v);

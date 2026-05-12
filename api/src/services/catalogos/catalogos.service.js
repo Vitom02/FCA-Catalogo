@@ -1,4 +1,5 @@
-import { query, SCHEMA } from "../../database/index.js";
+import { pool, query, SCHEMA } from "../../database/index.js";
+import { filasDetalleEnOrdenCatalogoPdf } from "../../../../web/src/utilidades/catalogoPdfLogica.js";
 
 function fromTable(table) {
   const s = String(SCHEMA).replace(/"/g, '""');
@@ -46,6 +47,77 @@ function mapRow(row) {
     fecha_insc: formatTimestamp(row.fecha_insc),
     fecha_nacimiento: formatDateOnly(row.fecha_nacimiento),
   };
+}
+
+const ID_ESTADO_CERRADO = 2;
+const ID_ESTADO_FINALIZADO = 3;
+
+/**
+ * Asigna `numero` 1…n en el mismo orden que el PDF del catálogo (`filasDetalleEnOrdenCatalogoPdf`).
+ * Requiere exposición con numeración automática (2) y estado cerrado o finalizado.
+ * @param {number | string} idExposicion
+ */
+export async function aplicarNumeracionAutomaticaPorOrdenPdf(idExposicion) {
+  const idExpo = Number(idExposicion);
+  if (!Number.isFinite(idExpo) || idExpo < 1) {
+    const err = new Error("id_exposicion inválido");
+    err.code = "CATALOGOS_FILTRO_INVALIDO";
+    throw err;
+  }
+
+  const ex = await query(
+    `SELECT id_estado, tipo_numeracion FROM exposiciones WHERE id_exposicion = $1`,
+    [idExpo]
+  );
+  const row = ex.rows[0];
+  if (!row) {
+    const err = new Error("Exposición no encontrada");
+    err.code = "CATALOGOS_EXPO_NO_ENCONTRADA";
+    throw err;
+  }
+  if (Number(row.tipo_numeracion) !== 2) {
+    const err = new Error(
+      "La numeración de esta exposición es manual; no se aplica asignación automática."
+    );
+    err.code = "CATALOGOS_NUMERACION_NO_AUTOMATICA";
+    throw err;
+  }
+  const est = Number(row.id_estado);
+  if (est !== ID_ESTADO_CERRADO && est !== ID_ESTADO_FINALIZADO) {
+    const err = new Error(
+      "El torneo debe estar cerrado o finalizado para asignar la numeración automática."
+    );
+    err.code = "CATALOGOS_NUMERACION_ESTADO_INVALIDO";
+    throw err;
+  }
+
+  const detalle = await listarPorExposicionDetalle(idExpo);
+  const ordenadas = filasDetalleEnOrdenCatalogoPdf(
+    /** @type {Record<string, unknown>[]} */ (detalle)
+  );
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let n = 1;
+    for (const fila of ordenadas) {
+      const idCat = Number(fila.id_catalogo);
+      if (!Number.isFinite(idCat)) continue;
+      await client.query(
+        `UPDATE ${TABLE} SET numero = $1 WHERE id_catalogo = $2 AND id_exposicion = $3`,
+        [n, idCat, idExpo]
+      );
+      n += 1;
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  return { total: ordenadas.length };
 }
 
 /**
@@ -377,8 +449,22 @@ export async function crear(payload) {
   const numero = optInt(payload.numero);
   const fechaInsc = optTimestamp(payload.fecha_insc);
 
+  if (numero != null) {
+    const dup = await query(
+      `SELECT 1 FROM ${TABLE} WHERE id_exposicion = $1 AND numero = $2 LIMIT 1`,
+      [id_exposicion, numero]
+    );
+    if (dup.rowCount > 0) {
+      const err = new Error(
+        "Ya existe una inscripción con ese número en esta exposición"
+      );
+      err.code = "CATALOGOS_NUMERO_DUPLICADO";
+      throw err;
+    }
+  }
+
   const r = await query(
-    `INSERT INTO ${TABLE} (
+      `INSERT INTO ${TABLE} (
        id_exposicion, id_ejemplar, id_categoria, numero, id_usuario, fecha_insc
      ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()))
      RETURNING id_catalogo`,
@@ -398,6 +484,30 @@ export async function crear(payload) {
  * Actualiza solo las columnas presentes en `payload` (excepto id_catalogo).
  */
 export async function actualizar(idCatalogo, payload) {
+  if (Object.prototype.hasOwnProperty.call(payload ?? {}, "numero")) {
+    const newNum = optInt(payload.numero);
+    if (newNum != null) {
+      const cur = await query(
+        `SELECT id_exposicion FROM ${TABLE} WHERE id_catalogo = $1`,
+        [idCatalogo]
+      );
+      const idExpo = cur.rows[0]?.id_exposicion;
+      if (idExpo != null) {
+        const dup = await query(
+          `SELECT 1 FROM ${TABLE} WHERE id_exposicion = $1 AND numero = $2 AND id_catalogo <> $3 LIMIT 1`,
+          [idExpo, newNum, idCatalogo]
+        );
+        if (dup.rowCount > 0) {
+          const err = new Error(
+            "Ya existe una inscripción con ese número en esta exposición"
+          );
+          err.code = "CATALOGOS_NUMERO_DUPLICADO";
+          throw err;
+        }
+      }
+    }
+  }
+
   const updates = [];
   const values = [];
   let i = 1;

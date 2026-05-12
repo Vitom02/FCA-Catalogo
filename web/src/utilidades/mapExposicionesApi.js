@@ -35,6 +35,13 @@ export function mapExposicionApiToRow(api) {
     cerradoManualRaw === 1 ||
     cerradoManualRaw === '1'
 
+  const tnRaw = api.tipo_numeracion
+  const tipoNumeracionNum =
+    tnRaw != null && tnRaw !== '' && Number.isFinite(Number(tnRaw))
+      ? Math.trunc(Number(tnRaw))
+      : 2
+  const tipo_numeracion = tipoNumeracionNum === 1 ? 1 : 2
+
   const kennelFromClub =
     idClub != null && !Number.isNaN(idClub) ? String(idClub) : ''
 
@@ -68,6 +75,7 @@ export function mapExposicionApiToRow(api) {
     numeros_extra_razas: extraRazas,
     numeros_extra_cachorros: extraCachorros,
     cerrado_manual: cerradoManual,
+    tipo_numeracion,
   }
 }
 

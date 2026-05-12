@@ -30,6 +30,17 @@ function validarEnterosOpcionalesExpo(b) {
   return null;
 }
 
+/** Si viene `tipo_numeracion`, debe ser 1 (manual) o 2 (automática). */
+function validarTipoNumeracionOpcional(b) {
+  const v = b?.tipo_numeracion;
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  if (n !== 1 && n !== 2) {
+    return "tipo_numeracion debe ser 1 (manual) o 2 (automática)";
+  }
+  return null;
+}
+
 function validarCrear(body) {
   const b = body ?? {};
   const nombre = String(b.exposicion ?? "").trim();
@@ -61,7 +72,9 @@ function validarCrear(body) {
     }
   }
 
-  return validarEnterosOpcionalesExpo(b);
+  const msgInt = validarEnterosOpcionalesExpo(b);
+  if (msgInt) return msgInt;
+  return validarTipoNumeracionOpcional(b);
 }
 
 export async function listarEstados(_req, res) {
@@ -143,6 +156,10 @@ export async function crear(req, res) {
       res.status(400).json({ error: err.message });
       return;
     }
+    if (err && err.code === "EXPO_TIPO_NUMERACION_INVALIDO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error(err);
     res.status(500).json({ error: err.message });
   }
@@ -171,6 +188,11 @@ export async function actualizar(req, res) {
       res.status(400).json({ error: msgInt });
       return;
     }
+    const msgTn = validarTipoNumeracionOpcional(b);
+    if (msgTn) {
+      res.status(400).json({ error: msgTn });
+      return;
+    }
     const row = await exposicionesService.actualizar(id, b);
     res.json(row);
   } catch (err) {
@@ -179,6 +201,10 @@ export async function actualizar(req, res) {
       return;
     }
     if (err && err.code === "EXPO_CERRADO_MANUAL_INVALIDO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err && err.code === "EXPO_TIPO_NUMERACION_INVALIDO") {
       res.status(400).json({ error: err.message });
       return;
     }
