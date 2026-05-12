@@ -1,5 +1,5 @@
 import { pool, query, SCHEMA } from "../../database/index.js";
-import { filasDetalleEnOrdenCatalogoPdf } from "../../../../web/src/utilidades/catalogoPdfLogica.js";
+import { filasDetalleEnOrdenCatalogoPdf } from "./catalogoOrdenPdf.js";
 
 function fromTable(table) {
   const s = String(SCHEMA).replace(/"/g, '""');
