@@ -29,7 +29,8 @@
   display: flex;
   align-items: center;
   line-height: 0;
-  border-radius: 8px;
+  border-radius: 10px;
+  overflow: hidden;
   text-decoration: none;
   color: inherit;
 }
@@ -46,6 +47,7 @@
   max-width: min(260px, 48vw);
   object-fit: contain;
   object-position: left center;
+  border-radius: 10px;
 }
 
 .app-header__session {
