@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { formatExhibitionDateRange, formatTableDate } from './dateDisplay.js'
+import { etiquetaNumeroCatalogoGrilla } from './mapCatalogoApi.js'
 
 /** Celdas de inscripción: mismo criterio que en la vista (sin guiones largos). */
 function textoCeldaInscripcion(v) {
@@ -62,7 +63,13 @@ export function downloadCatalogoExposicionExcel({ exhibition, enrollments, colum
   const head = columns.map((col) => columnLabels[col] ?? col)
   aoa.push(head)
   for (const row of enrollments) {
-    aoa.push(columns.map((col) => textoCeldaInscripcion(row[col])))
+    aoa.push(
+      columns.map((col) =>
+        col === 'numero'
+          ? textoCeldaInscripcion(etiquetaNumeroCatalogoGrilla(row))
+          : textoCeldaInscripcion(row[col]),
+      ),
+    )
   }
 
   const sheet = XLSX.utils.aoa_to_sheet(aoa)
@@ -72,7 +79,13 @@ export function downloadCatalogoExposicionExcel({ exhibition, enrollments, colum
     const maxData =
       enrollments.length > 0
         ? Math.max(
-            ...enrollments.map((r) => String(textoCeldaInscripcion(r[colKey])).length),
+            ...enrollments.map((r) =>
+              String(
+                colKey === 'numero'
+                  ? textoCeldaInscripcion(etiquetaNumeroCatalogoGrilla(r))
+                  : textoCeldaInscripcion(r[colKey]),
+              ).length,
+            ),
           )
         : 0
     const wch = Math.min(48, Math.max(10, String(h).length, maxData))

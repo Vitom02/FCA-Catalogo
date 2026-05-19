@@ -68,8 +68,8 @@ export function mapExposicionApiToRow(api) {
     'Fecha inicio': desde,
     'Fecha fin': hasta,
     Cantidad: '—',
-    /** Números extra por tipo (API); el campo de tabla único es tema aparte. */
-    'Números extra': '1',
+    /** Se rellena con `mapConteosCantidadEnFilas`: cantidad de ejemplares NE en catálogo. */
+    'Números extra': '0',
     Estado: estadoExpo || 'Abierto',
     cupo_limite: cupoLimite,
     numeros_extra_razas: extraRazas,
@@ -91,26 +91,34 @@ export function mapListaExposicionesApi(data) {
 }
 
 /**
- * Asigna `Cantidad` = total de inscriptos en `web.catalogos` por `id_exposicion`.
+ * Asigna `Cantidad` = total de inscriptos y `Números extra` = inscriptos con `numeros_extra` (NE).
  * @param {import('../datos/exhibitionsTable.js').ExhibitionRow[]} rows
  * @param {unknown} conteosData respuesta de `GET /api/catalogos/conteos`
  */
 export function mapConteosCantidadEnFilas(rows, conteosData) {
-  /** @type {Record<number, number>} */
+  /** @type {Record<number, { total: number, ne: number }>} */
   const map = {}
   const arr = Array.isArray(conteosData) ? conteosData : []
   for (const c of arr) {
     if (!c || typeof c !== 'object') continue
-    const raw = /** @type {{ id_exposicion?: unknown, total?: unknown }} */ (c)
+    const raw = /** @type {{ id_exposicion?: unknown, total?: unknown, total_numeros_extra?: unknown }} */ (
+      c
+    )
     const id = Number(raw.id_exposicion)
     const t = Number(raw.total)
+    const ne = Number(raw.total_numeros_extra)
     if (Number.isFinite(id)) {
-      map[id] = Number.isFinite(t) ? t : 0
+      map[id] = {
+        total: Number.isFinite(t) ? t : 0,
+        ne: Number.isFinite(ne) ? ne : 0,
+      }
     }
   }
   return rows.map((row) => {
     const id = row.id_exposicion
-    const n = id != null && map[id] != null ? map[id] : 0
-    return { ...row, Cantidad: String(n) }
+    const agg = id != null ? map[id] : undefined
+    const n = agg != null ? agg.total : 0
+    const nExtra = agg != null ? agg.ne : 0
+    return { ...row, Cantidad: String(n), 'Números extra': String(nExtra) }
   })
 }

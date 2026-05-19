@@ -12,6 +12,7 @@ import {
 } from '../../apiConnect.jsx'
 import { VistaAnotacionExposicion } from '../../componentes/exposicion/VistaAnotacionExposicion.jsx'
 import {
+  esExposicionAccesibleParaCatalogoClub,
   esExposicionEstadoAbierto,
   getExhibitionRowKey,
   sessionMatchesExhibitionRow,
@@ -73,7 +74,10 @@ export function PaginaExposicion({
   const canAccess = useMemo(() => {
     if (!exhibition) return false
     if (!sessionMatchesExhibitionRow(session, exhibition)) return false
-    if (session.role !== 'superadmin' && !esExposicionEstadoAbierto(exhibition)) {
+    if (
+      session.role !== 'superadmin' &&
+      !esExposicionAccesibleParaCatalogoClub(exhibition)
+    ) {
       return false
     }
     return true
@@ -112,7 +116,7 @@ export function PaginaExposicion({
       const base = mapListaExposicionesApi(data)
       let merged = mapConteosCantidadEnFilas(base, conteos)
       if (session.role !== 'superadmin') {
-        merged = merged.filter((r) => esExposicionEstadoAbierto(r))
+        merged = merged.filter((r) => esExposicionAccesibleParaCatalogoClub(r))
       }
       setExhibitionRows(merged)
     } catch {
@@ -197,7 +201,13 @@ export function PaginaExposicion({
         id_usuario: idUsuario,
       }
       const numRaw = entry.numero
-      if (numRaw !== undefined && numRaw !== null && numRaw !== '') {
+      if (
+        exhibition != null &&
+        esExposicionEstadoAbierto(exhibition) &&
+        numRaw !== undefined &&
+        numRaw !== null &&
+        numRaw !== ''
+      ) {
         const n = Number(numRaw)
         if (Number.isFinite(n) && n >= 1) {
           body.numero = Math.trunc(n)
@@ -229,8 +239,15 @@ export function PaginaExposicion({
       if (idCat != null && Number.isFinite(Number(idCat))) {
         payload.id_categoria = Number(idCat)
       }
+      const nex = Number(entry.numeros_extra)
+      const esNe = Number.isFinite(nex) && nex >= 1
       const rawNum = entry.numero
-      if (rawNum !== undefined && rawNum !== null && rawNum !== '') {
+      if (
+        !esNe &&
+        rawNum !== undefined &&
+        rawNum !== null &&
+        rawNum !== ''
+      ) {
         const n = Number(rawNum)
         if (Number.isFinite(n) && n >= 1) {
           payload.numero = Math.trunc(n)

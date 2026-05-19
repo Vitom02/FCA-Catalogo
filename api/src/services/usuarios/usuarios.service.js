@@ -1,4 +1,5 @@
 import { query, SCHEMA } from "../../database/index.js";
+import { esClubFcaParaAdmin } from "../../lib/clubesFcaAdmin.js";
 
 function fromTable(table) {
   const s = String(SCHEMA).replace(/"/g, '""');
@@ -8,6 +9,10 @@ function fromTable(table) {
 
 const TABLE_CATEGORIAS = fromTable("usuarios_categorias");
 const TABLE_USUARIOS = fromTable("usuarios");
+const TABLE_CLUBES = fromTable("clubes");
+
+/** `usuarios_categorias` seed: 1 = administrador. */
+const USUARIO_CATEGORIA_ADMIN = 1;
 
 const USUARIO_COLUMNS = [
   "nombre",
@@ -38,6 +43,36 @@ function optStr(v, maxLen) {
   const s = String(v).trim();
   if (maxLen && s.length > maxLen) return s.slice(0, maxLen);
   return s;
+}
+
+function errorAdminSoloClubFca() {
+  const err = new Error(
+    "Solo pueden ser administradores los usuarios del club FCA (configurable en la API: ID_CLUBES_FCA o ID_CLUB_FCA)."
+  );
+  err.code = "USUARIOS_VALIDACION";
+  return err;
+}
+
+/**
+ * Solo categoría administrador (`1`) permitida si el club está en la lista FCA para staff.
+ *
+ * Si ya era admin sin club FCA (datos viejos), se permite mantener ese estado mientras el club no cambie.
+ *
+ * @param {number} idCategoria siguiente categoría efectiva
+ * @param {unknown} idClub siguiente id club efectivo (`null` = sin club)
+ * @param {{ id_categoria: unknown; id_club: unknown } | null} estadoPrevio
+ */
+function validarAdministradorSoloClubFca(idCategoria, idClub, estadoPrevio) {
+  const cat = Number(idCategoria);
+  if (!Number.isFinite(cat) || cat !== USUARIO_CATEGORIA_ADMIN) return;
+  if (esClubFcaParaAdmin(idClub)) return;
+  const prev = estadoPrevio;
+  const mismoClubQueAntes =
+    prev != null &&
+    Number(prev.id_categoria) === USUARIO_CATEGORIA_ADMIN &&
+    optInt(prev.id_club) === optInt(idClub);
+  if (mismoClubQueAntes) return;
+  throw errorAdminSoloClubFca();
 }
 
 /**
@@ -127,9 +162,11 @@ export async function listar(filtros = {}) {
 
   const r = await query(
     `SELECT u.id_usuario, u.nombre, u.apellido, u.id_club, u.id_categoria, u.usuario, u.baja,
-            c.categoria AS categoria_nombre${colClave}
+            c.categoria AS categoria_nombre,
+            cl.club AS club_nombre${colClave}
      FROM ${TABLE_USUARIOS} u
      LEFT JOIN ${TABLE_CATEGORIAS} c ON c.id_categoria = u.id_categoria
+     LEFT JOIN ${TABLE_CLUBES} cl ON cl.id_club = u.id_club
      ${where}
      ORDER BY u.id_usuario`,
     params
@@ -146,9 +183,11 @@ export async function obtenerPorId(idUsuario, opts = {}) {
   const colClave = incluirClave ? `, u.clave` : "";
   const r = await query(
     `SELECT u.id_usuario, u.nombre, u.apellido, u.id_club, u.id_categoria, u.usuario, u.baja,
-            c.categoria AS categoria_nombre${colClave}
+            c.categoria AS categoria_nombre,
+            cl.club AS club_nombre${colClave}
      FROM ${TABLE_USUARIOS} u
      LEFT JOIN ${TABLE_CATEGORIAS} c ON c.id_categoria = u.id_categoria
+     LEFT JOIN ${TABLE_CLUBES} cl ON cl.id_club = u.id_club
      WHERE u.id_usuario = $1`,
     [idUsuario]
   );
@@ -230,6 +269,8 @@ export async function crear(payload) {
     throw err;
   }
 
+  validarAdministradorSoloClubFca(Math.trunc(id_categoria), id_club, null);
+
   if (await existeOtroUsuarioActivoConMismoNombre(usuario)) {
     throw errorUsuarioDuplicado();
   }
@@ -254,6 +295,35 @@ export async function crear(payload) {
 }
 
 export async function actualizar(idUsuario, payload) {
+  const curRes = await query(
+    `SELECT id_categoria, id_club FROM ${TABLE_USUARIOS} WHERE id_usuario = $1`,
+    [idUsuario]
+  );
+  const cur = curRes.rows[0];
+  if (!cur) {
+    const err = new Error("Usuario no encontrado");
+    err.code = "USUARIOS_VALIDACION";
+    throw err;
+  }
+
+  let nextCat = Number(cur.id_categoria);
+  let nextClub = optInt(cur.id_club);
+  if (!Number.isFinite(nextCat)) nextCat = 2;
+  if (Object.prototype.hasOwnProperty.call(payload, "id_categoria")) {
+    const n = Number(payload.id_categoria);
+    if (!Number.isFinite(n)) {
+      const err = new Error("id_categoria inválido");
+      err.code = "USUARIOS_VALIDACION";
+      throw err;
+    }
+    nextCat = Math.trunc(n);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "id_club")) {
+    nextClub = optInt(payload.id_club);
+  }
+
+  validarAdministradorSoloClubFca(nextCat, nextClub, cur);
+
   const updates = [];
   const values = [];
   let i = 1;

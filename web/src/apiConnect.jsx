@@ -1,16 +1,25 @@
 /**
  * Conexión al backend Node (carpeta `/api` del repo).
- * Base por defecto: `http://localhost:3001`. Con `VITE_API_URL` vacío, las rutas `/api/...` van al mismo origen (útil con Nginx proxy).
+ * - Desarrollo: sin `VITE_API_URL`, las peticiones van al mismo host que el front (`/api/...`; proxy Vite → :3001), útil desde el celular por IP local.
+ * - Con `VITE_API_URL=http://...` forzás otra API (ej. servidor remoto).
+ * - Producción sin variable: mismo origen que la página (`/api/...`; Nginx proxy o Compose).
  *
  * Uso en componentes:
  *   import { listarExposiciones, buscarEjemplares, listarCategoriasEjemplares } from './apiConnect.jsx'
  */
 
+function normalizeApiBase(s) {
+  return String(s).trim().replace(/\/$/, '')
+}
+
 /** @type {string} */
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace(
-  /\/$/,
-  '',
-)
+const API_BASE_URL = (() => {
+  const raw = import.meta.env.VITE_API_URL
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    return normalizeApiBase(raw)
+  }
+  return ''
+})()
 
 /** URL absoluta para fetch: mismo origen si `VITE_API_URL` está vacío (p. ej. Nginx + `/api`). */
 function resolveApiUrl(path) {

@@ -1,11 +1,11 @@
 /*
- * Catálogo A5 al estilo RCC regional (referencia: RCC - REGIONAL - CATALOGO.pdf).
- * Pantalla = vista previa centrada; impresión = hoja A5 (148 × 210 mm).
+ * Catálogo RCC regional (referencia impresa típica); hoja física **A4** (210 × 297 mm).
+ * Pantalla = vista previa centrada por bloque-sección; al imprimir / PDF el navegador pagina dentro de cada sección cuando el contenido excede una hoja.
  */
 
 @page {
-  size: A5 portrait;
-  margin: 8mm 10mm 12mm;
+  size: A4 portrait;
+  margin: 10mm 12mm 14mm;
 }
 
 html {
@@ -74,13 +74,13 @@ html {
   }
 }
 
-/* Cada bloque ≈ una hoja lógica por sección del catálogo (ADULTOS, JÓVENES, …) */
+/* Un bloque lógico por macro-sección (ADULTOS, JÓVENES, …); puede ocupar varias hojas A4 si el contenido lo requiere */
 .pdf-page {
   position: relative;
   box-sizing: border-box;
   width: 100%;
-  max-width: 148mm;
-  min-height: 210mm;
+  max-width: 210mm;
+  min-height: 297mm;
   margin: 0 auto;
   page-break-after: always;
   background: #fff;
@@ -103,7 +103,7 @@ html {
   line-height: 1.34;
   color: #000;
   box-sizing: border-box;
-  padding: 8mm 10mm 20mm;
+  padding: 10mm 12mm 22mm;
 }
 
 .pdf-title {
@@ -254,7 +254,7 @@ html {
 
 .pdf-footer {
   position: absolute;
-  bottom: 5mm;
+  bottom: 6mm;
   left: 0;
   right: 0;
   text-align: center;
@@ -284,17 +284,48 @@ html {
   .pdf-page {
     width: 100%;
     max-width: none;
-    min-height: auto;
+    min-height: 0;
     margin: 0;
     box-shadow: none;
   }
 
+  /* Márgenes de hoja definidos por @page; padding mínimo para no duplicar aire */
   .pdf-container {
-    padding: 2mm 0 18mm;
+    padding: 0 2mm 4mm;
   }
 
   .pdf-entry {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* Títulos de grupo / categoría: intentar que no queden huérfanos antes del siguiente bloque */
+  .pdf-group,
+  .pdf-category {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /*
+   * Paginación dentro de una macro-sección: el bloque de raza puede dividirse entre hojas;
+   * cada renglón de ejemplar sigue tratando de no partirse (`break-inside: avoid`).
+   */
+  .pdf-footer {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    margin-top: 8mm;
+    padding-bottom: 0;
+  }
+
+  .pdf-section,
+  section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .pdf-breed-block {
+    break-inside: auto;
+    page-break-inside: auto;
   }
 }

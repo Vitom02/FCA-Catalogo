@@ -4,7 +4,10 @@
   flex-direction: column;
   min-height: 0;
   width: 100%;
-  padding: 16px 24px 16px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 16px max(24px, env(safe-area-inset-right, 0px)) 16px
+    max(24px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
 }
 
@@ -179,6 +182,10 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   border-radius: 8px;
   border: 1px solid var(--table-grid);
   background: var(--card-bg);
@@ -440,20 +447,32 @@
   z-index: 1200;
   background: rgba(10, 31, 53, 0.5);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 12px;
+  justify-content: flex-start;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
 }
 
 .expo-add-modal {
   width: min(100%, 400px);
+  max-height: calc(
+    100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px
+  );
   display: flex;
   flex-direction: column;
+  margin: auto;
+  flex-shrink: 0;
   background: var(--card-bg);
   border: 1px solid var(--home-frame-border);
   border-radius: 10px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
   box-shadow:
     0 0 0 2px var(--home-frame-outer),
     0 12px 32px rgba(10, 31, 53, 0.18);
@@ -541,17 +560,6 @@
   width: 100%;
 }
 
-.expo-add-modal__input--num {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.expo-add-modal__input--num::-webkit-outer-spin-button,
-.expo-add-modal__input--num::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
 .expo-add-modal__input:focus,
 .expo-add-modal__select:focus {
   outline: 2px solid var(--accent);
@@ -563,12 +571,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-}
-
-.expo-add-modal__row3 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
 }
 
 .expo-add-modal__club-grid {
@@ -667,15 +669,10 @@
   border-top: 1px solid var(--input-border);
 }
 
-@media (max-width: 360px) {
-  .expo-add-modal__row3 {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 640px) {
   .session-home {
-    padding: 12px 16px 12px;
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px
+      max(16px, env(safe-area-inset-left, 0px));
   }
 
   .session-home__filters {
@@ -691,5 +688,11 @@
     padding: 8px 8px;
     font-size: 0.78125rem;
     letter-spacing: 0.035em;
+  }
+}
+
+@media (max-width: 420px) {
+  .session-home__filters-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

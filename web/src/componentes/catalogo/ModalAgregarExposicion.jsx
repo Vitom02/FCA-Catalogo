@@ -16,9 +16,6 @@ function emptyForm() {
     fechaInicio: '',
     fechaFin: '',
     kennelId: '',
-    cantidad: '',
-    extraRazas: '',
-    extraCachorros: '',
     modoCierre: /** @type {'auto' | 'manual'} */ ('auto'),
     /** 1 = manual, 2 = automática */
     tipoNumeracion: /** @type {1 | 2} */ (2),
@@ -34,10 +31,6 @@ function rowToForm(row) {
     idClub != null && Number.isFinite(Number(idClub))
       ? String(idClub)
       : String(row.kennelId ?? '').trim()
-  const cupo = /** @type {{ cupo_limite?: number | null }} */ (row).cupo_limite
-  const er = /** @type {{ numeros_extra_razas?: number | null }} */ (row).numeros_extra_razas
-  const ec = /** @type {{ numeros_extra_cachorros?: number | null }} */ (row).numeros_extra_cachorros
-
   const modoCierre =
     /** @type {{ cerrado_manual?: boolean }} */ (row).cerrado_manual === true
       ? 'manual'
@@ -51,20 +44,9 @@ function rowToForm(row) {
     fechaInicio: String(row['Fecha inicio'] ?? '').trim(),
     fechaFin: String(row['Fecha fin'] ?? '').trim(),
     kennelId: kennelFromId,
-    cantidad:
-      cupo != null && Number.isFinite(Number(cupo)) ? String(cupo) : '',
-    extraRazas: er != null && Number.isFinite(Number(er)) ? String(er) : '',
-    extraCachorros: ec != null && Number.isFinite(Number(ec)) ? String(ec) : '',
     modoCierre,
     tipoNumeracion,
   }
-}
-
-function toOptIntStr(s) {
-  const t = String(s ?? '').trim()
-  if (t === '') return null
-  const n = parseInt(t, 10)
-  return Number.isFinite(n) ? n : null
 }
 
 /**
@@ -92,22 +74,12 @@ function buildApiBody(form, opts = {}) {
     id_tipo: EXPO_ID_TIPO_DEFAULT,
     ano: y,
     id_mes: m,
-    cantidad: toOptIntStr(form.cantidad),
-    numeros_extra_razas: toOptIntStr(form.extraRazas),
-    numeros_extra_cachorros: toOptIntStr(form.extraCachorros),
     tipo_numeracion: form.tipoNumeracion === 1 ? 1 : 2,
   }
   if (opts.esEdicion) {
     body.cerrado_manual = form.modoCierre === 'manual'
   }
   return body
-}
-
-function parseNumInput(v) {
-  const t = String(v ?? '').trim()
-  if (t === '') return ''
-  const n = parseInt(t, 10)
-  return Number.isFinite(n) ? String(Math.max(0, n)) : ''
 }
 
 /**
@@ -249,19 +221,13 @@ export function ModalAgregarExposicion({
       !form.fechaInicio ||
       !form.fechaFin ||
       !Number.isFinite(kennelOk) ||
-      kennelOk < 1 ||
-      !String(form.cantidad).trim()
+      kennelOk < 1
     ) {
-      window.alert('Completá nombre, fechas, club organizador (elegí de la lista) y cantidad.')
+      window.alert('Completá nombre, fechas y club organizador (elegí de la lista).')
       return
     }
     if (form.fechaFin < form.fechaInicio) {
       window.alert('La fecha de fin debe ser igual o posterior a la de inicio.')
-      return
-    }
-    const cantidadN = parseInt(String(form.cantidad).trim(), 10)
-    if (!Number.isFinite(cantidadN) || cantidadN < 0) {
-      window.alert('La cantidad debe ser un número ≥ 0.')
       return
     }
 
@@ -456,60 +422,8 @@ export function ModalAgregarExposicion({
             </div>
           </div>
 
-          <div className="expo-add-modal__row3">
-            <label className="expo-add-modal__field expo-add-modal__field--compact">
-              <span className="expo-add-modal__label">Cantidad</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                className="expo-add-modal__input expo-add-modal__input--compact expo-add-modal__input--num"
-                value={form.cantidad}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, cantidad: parseNumInput(e.target.value) }))
-                }
-                autoComplete="off"
-                required
-                disabled={guardando}
-              />
-            </label>
-            <label className="expo-add-modal__field expo-add-modal__field--compact">
-              <span className="expo-add-modal__label">Extra razas</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                className="expo-add-modal__input expo-add-modal__input--compact expo-add-modal__input--num"
-                value={form.extraRazas}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, extraRazas: parseNumInput(e.target.value) }))
-                }
-                autoComplete="off"
-                disabled={guardando}
-              />
-            </label>
-            <label className="expo-add-modal__field expo-add-modal__field--compact">
-              <span className="expo-add-modal__label">Extra cach.</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                className="expo-add-modal__input expo-add-modal__input--compact expo-add-modal__input--num"
-                value={form.extraCachorros}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    extraCachorros: parseNumInput(e.target.value),
-                  }))
-                }
-                autoComplete="off"
-                disabled={guardando}
-              />
-            </label>
-          </div>
-
           <label className="expo-add-modal__field expo-add-modal__field--compact">
-            <span className="expo-add-modal__label">Numeración de catálogo</span>
+            <span className="expo-add-modal__label">Numeración del catálogo</span>
             <select
               className="expo-add-modal__select expo-add-modal__input--compact"
               value={form.tipoNumeracion === 1 ? '1' : '2'}

@@ -3,7 +3,7 @@
  * `Número` = identificador en catálogo y claves de URL.
  * `Cantidad` = cupo/cantidad (visible sobre todo para usuario normal).
  * `Descripción` = nombre de la exposición.
- * `Números extra`: entero 1–10 (como string en filas).
+ * `Números extra`: cantidad de ejemplares NE en catálogo (string en filas; viene de /catalogos/conteos).
  * `Estado`: catálogo web.exposiciones_estados (id_estado en API).
  */
 
@@ -26,6 +26,23 @@ export function esExposicionEstadoAbierto(row) {
     .trim()
     .toLowerCase()
   return t === 'abierto'
+}
+
+/**
+ * El club puede abrir la ficha catálogo: torneo abierto, cerrado o finalizado (NE solo en cerrado/finalizado).
+ * @param {Record<string, unknown> & { id_estado?: number, Estado?: string }} [row]
+ */
+export function esExposicionAccesibleParaCatalogoClub(row) {
+  if (!row) return false
+  const idRaw = /** @type {{ id_estado?: unknown }} */ (row).id_estado
+  const id = idRaw != null ? Number(idRaw) : NaN
+  if (Number.isFinite(id)) {
+    return id === 1 || id === 2 || id === 3
+  }
+  const t = String(row['Estado'] ?? '')
+    .trim()
+    .toLowerCase()
+  return t === 'abierto' || t === 'cerrado' || t === 'finalizado'
 }
 
 export const EXHIBITION_TABLE_COLUMNS = [
@@ -58,7 +75,7 @@ export const EXHIBITION_TABLE_ROWS = [
     Descripción: 'Expo Regional Invierno',
     'Número': '101',
     Cantidad: '120',
-    'Números extra': '5',
+    'Números extra': '0',
     'Fecha inicio': '2026-05-01',
     'Fecha fin': '2026-05-03',
     'Estado': 'Abierto',
@@ -68,7 +85,7 @@ export const EXHIBITION_TABLE_ROWS = [
     Descripción: 'Expo Primavera',
     'Número': '102',
     Cantidad: '200',
-    'Números extra': '10',
+    'Números extra': '0',
     'Fecha inicio': '2026-06-10',
     'Fecha fin': '2026-06-12',
     'Estado': 'Cerrado',
@@ -78,7 +95,7 @@ export const EXHIBITION_TABLE_ROWS = [
     Descripción: 'Expo Sur 2026',
     'Número': '201',
     Cantidad: '80',
-    'Números extra': '1',
+    'Números extra': '0',
     'Fecha inicio': '2026-07-01',
     'Fecha fin': '2026-07-02',
     'Estado': 'Abierto',

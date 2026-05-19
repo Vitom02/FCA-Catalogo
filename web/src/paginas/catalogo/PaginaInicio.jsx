@@ -14,7 +14,7 @@ import {
 import {
   EXHIBITION_NUMERIC_COLUMNS,
   EXHIBITION_TABLE_COLUMNS,
-  esExposicionEstadoAbierto,
+  esExposicionAccesibleParaCatalogoClub,
   filterExhibitionsByCatalogCriteria,
   filterExhibitionsByKennelId,
   filterExhibitionsByRole,
@@ -192,7 +192,7 @@ export function PaginaInicio({
       const base = mapListaExposicionesApi(data)
       let merged = mapConteosCantidadEnFilas(base, conteos)
       if (session.role !== 'superadmin') {
-        merged = merged.filter((r) => esExposicionEstadoAbierto(r))
+        merged = merged.filter((r) => esExposicionAccesibleParaCatalogoClub(r))
       }
       setExhibitionRows(merged)
       setExpoLoad({ status: 'ok', error: null })

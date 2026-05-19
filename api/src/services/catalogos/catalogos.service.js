@@ -18,6 +18,9 @@ const COLUMNS = [
   "fecha_insc",
 ];
 
+const ID_ESTADO_CERRADO = 2;
+const ID_ESTADO_FINALIZADO = 3;
+
 function formatTimestamp(value) {
   if (value == null) return value;
   if (value instanceof Date) return value.toISOString();
@@ -48,9 +51,6 @@ function mapRow(row) {
     fecha_nacimiento: formatDateOnly(row.fecha_nacimiento),
   };
 }
-
-const ID_ESTADO_CERRADO = 2;
-const ID_ESTADO_FINALIZADO = 3;
 
 /**
  * Asigna `numero` 1…n en el mismo orden que el PDF del catálogo (`filasDetalleEnOrdenCatalogoPdf`).
@@ -92,9 +92,12 @@ export async function aplicarNumeracionAutomaticaPorOrdenPdf(idExposicion) {
   }
 
   const detalle = await listarPorExposicionDetalle(idExpo);
-  const ordenadas = filasDetalleEnOrdenCatalogoPdf(
-    /** @type {Record<string, unknown>[]} */ (detalle)
-  );
+  const soloOficiales =
+    /** @type {Record<string, unknown>[]} */ (detalle).filter((f) => {
+      const ne = Number(f.numeros_extra);
+      return !Number.isFinite(ne) || ne < 1;
+    });
+  const ordenadas = filasDetalleEnOrdenCatalogoPdf(soloOficiales);
 
   const client = await pool.connect();
   try {
@@ -104,7 +107,7 @@ export async function aplicarNumeracionAutomaticaPorOrdenPdf(idExposicion) {
       const idCat = Number(fila.id_catalogo);
       if (!Number.isFinite(idCat)) continue;
       await client.query(
-        `UPDATE ${TABLE} SET numero = $1 WHERE id_catalogo = $2 AND id_exposicion = $3`,
+        `UPDATE ${TABLE} SET numero = $1 WHERE id_catalogo = $2 AND id_exposicion = $3 AND numeros_extra IS NULL`,
         [n, idCat, idExpo]
       );
       n += 1;
@@ -177,6 +180,7 @@ export async function listarPorExposicionDetalle(idExposicion) {
        c.id_ejemplar,
        c.id_categoria,
        c.numero,
+       c.numeros_extra,
        c.id_usuario,
        c.fecha_insc,
        x.exposicion AS exposicion_descripcion,
@@ -386,10 +390,13 @@ function buildResumenArbol(celdas) {
     });
 }
 
-/** Inscriptos por exposición (`COUNT` desde `web.catalogos`). */
+/** Inscriptos por exposición (`COUNT` desde `web.catalogos`), más NE (`numeros_extra` no nulo). */
 export async function conteosPorExposicion() {
   const r = await query(
-    `SELECT id_exposicion, COUNT(*)::int AS total
+    `SELECT
+       id_exposicion,
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE numeros_extra IS NOT NULL)::int AS total_numeros_extra
      FROM ${TABLE}
      GROUP BY id_exposicion
      ORDER BY id_exposicion`
@@ -446,10 +453,27 @@ export async function crear(payload) {
   const id_ejemplar = Number(payload.id_ejemplar);
   const id_categoria = Number(payload.id_categoria);
   const id_usuario = Number(payload.id_usuario);
-  const numero = optInt(payload.numero);
+  let numero = optInt(payload.numero);
   const fechaInsc = optTimestamp(payload.fecha_insc);
 
-  if (numero != null) {
+  const exEst = await query(
+    `SELECT id_estado FROM web.exposiciones WHERE id_exposicion = $1`,
+    [id_exposicion]
+  );
+  const idEstado = Number(exEst.rows[0]?.id_estado);
+  const esCierre =
+    idEstado === ID_ESTADO_CERRADO || idEstado === ID_ESTADO_FINALIZADO;
+
+  let numeros_extra = /** @type {number | null} */ (null);
+  if (esCierre) {
+    numero = null;
+    const maxNe = await query(
+      `SELECT COALESCE(MAX(numeros_extra), 0)::int AS m FROM ${TABLE} WHERE id_exposicion = $1`,
+      [id_exposicion]
+    );
+    const m = Number(maxNe.rows[0]?.m);
+    numeros_extra = (Number.isFinite(m) ? m : 0) + 1;
+  } else if (numero != null) {
     const dup = await query(
       `SELECT 1 FROM ${TABLE} WHERE id_exposicion = $1 AND numero = $2 LIMIT 1`,
       [id_exposicion, numero]
@@ -465,14 +489,15 @@ export async function crear(payload) {
 
   const r = await query(
       `INSERT INTO ${TABLE} (
-       id_exposicion, id_ejemplar, id_categoria, numero, id_usuario, fecha_insc
-     ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()))
+       id_exposicion, id_ejemplar, id_categoria, numero, numeros_extra, id_usuario, fecha_insc
+     ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now()))
      RETURNING id_catalogo`,
     [
       id_exposicion,
       id_ejemplar,
       id_categoria,
       numero,
+      numeros_extra,
       id_usuario,
       fechaInsc,
     ]
@@ -484,26 +509,41 @@ export async function crear(payload) {
  * Actualiza solo las columnas presentes en `payload` (excepto id_catalogo).
  */
 export async function actualizar(idCatalogo, payload) {
-  if (Object.prototype.hasOwnProperty.call(payload ?? {}, "numero")) {
+  const payloadHasNumero = Object.prototype.hasOwnProperty.call(
+    payload ?? {},
+    "numero"
+  );
+
+  if (payloadHasNumero) {
+    const cur = await query(
+      `SELECT id_exposicion, numeros_extra FROM ${TABLE} WHERE id_catalogo = $1`,
+      [idCatalogo]
+    );
+    const crow = cur.rows[0];
+    const idExpo = crow?.id_exposicion != null ? Number(crow.id_exposicion) : null;
+    const nex = Number(crow?.numeros_extra);
+    const numerosExtraCur = Number.isFinite(nex) && nex >= 1 ? nex : null;
+
     const newNum = optInt(payload.numero);
-    if (newNum != null) {
-      const cur = await query(
-        `SELECT id_exposicion FROM ${TABLE} WHERE id_catalogo = $1`,
-        [idCatalogo]
+    if (numerosExtraCur != null && newNum != null) {
+      const err = new Error(
+        "Este ejemplar tiene numeración NE; no admite número de catálogo oficial por este medio."
       );
-      const idExpo = cur.rows[0]?.id_exposicion;
-      if (idExpo != null) {
-        const dup = await query(
-          `SELECT 1 FROM ${TABLE} WHERE id_exposicion = $1 AND numero = $2 AND id_catalogo <> $3 LIMIT 1`,
-          [idExpo, newNum, idCatalogo]
+      err.code = "CATALOGOS_NUMERO_EXTRA_BLOQUEADO";
+      throw err;
+    }
+
+    if (newNum != null && idExpo != null && Number.isFinite(idExpo)) {
+      const dup = await query(
+        `SELECT 1 FROM ${TABLE} WHERE id_exposicion = $1 AND numero = $2 AND id_catalogo <> $3 LIMIT 1`,
+        [idExpo, newNum, idCatalogo]
+      );
+      if (dup.rowCount > 0) {
+        const err = new Error(
+          "Ya existe una inscripción con ese número en esta exposición"
         );
-        if (dup.rowCount > 0) {
-          const err = new Error(
-            "Ya existe una inscripción con ese número en esta exposición"
-          );
-          err.code = "CATALOGOS_NUMERO_DUPLICADO";
-          throw err;
-        }
+        err.code = "CATALOGOS_NUMERO_DUPLICADO";
+        throw err;
       }
     }
   }

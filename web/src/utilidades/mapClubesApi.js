@@ -27,10 +27,14 @@ export function clubesSortedByName(clubes) {
   return clubes
     .filter((c) => c && typeof c === 'object' && c.id_club != null)
     .map((c) => {
-      const row = /** @type {{ id_club: unknown, club?: unknown }} */ (c)
+      const row = /** @type {{ id_club: unknown, club?: unknown, es_club_fca?: unknown }} */ (c)
       const id = Number(row.id_club)
       const club = String(row.club ?? '').trim() || String(id)
-      return { id_club: id, club }
+      return {
+        id_club: id,
+        club,
+        es_club_fca: Boolean(row.es_club_fca),
+      }
     })
     .filter((c) => Number.isFinite(c.id_club))
     .sort((a, b) => a.club.localeCompare(b.club, 'es'))

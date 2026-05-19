@@ -19,7 +19,7 @@ import {
   filtrarCategoriasElegibles,
 } from '../../utilidades/categoriaExposicion.js'
 import { mesesCompletosHastaReferencia } from '../../utilidades/edadEjemplar.js'
-import { idCategoriaFromEtiqueta } from '../../utilidades/mapCatalogoApi.js'
+import { idCategoriaFromEtiqueta, etiquetaNumeroCatalogoGrilla } from '../../utilidades/mapCatalogoApi.js'
 import {
   ejemplarBusquedaApiToEnrollment,
   normalizeSexoEjemplarApi,
@@ -204,6 +204,7 @@ export function VistaAnotacionExposicion({
   const [textoFiltroTablaGrupo, setTextoFiltroTablaGrupo] = useState('')
   const [filtroTablaCategoria, setFiltroTablaCategoria] = useState('')
   const [textoFiltroTablaCategoria, setTextoFiltroTablaCategoria] = useState('')
+  const [filtroTablaSoloNe, setFiltroTablaSoloNe] = useState(false)
 
   const [nombreModalOpen, setNombreModalOpen] = useState(false)
   const [nmSexo, setNmSexo] = useState('Macho')
@@ -244,6 +245,11 @@ export function VistaAnotacionExposicion({
     [exhibition],
   )
 
+  const numeracionManualEnFormulario = useMemo(
+    () => numeracionManual && esExposicionEstadoAbierto(exhibition),
+    [numeracionManual, exhibition],
+  )
+
   const razaItemsTabla = useMemo(() => {
     const g = String(filtroTablaGrupo ?? '').trim()
     const rows = g
@@ -273,6 +279,10 @@ export function VistaAnotacionExposicion({
     return enrollments
       .map((row, i) => ({ row, i }))
       .filter(({ row }) => {
+        if (filtroTablaSoloNe) {
+          const ne = Number(row.numeros_extra)
+          if (!(Number.isFinite(ne) && ne >= 1)) return false
+        }
         if (filtroTablaRaza && String(row.raza ?? '').trim() !== filtroTablaRaza) {
           return false
         }
@@ -287,7 +297,13 @@ export function VistaAnotacionExposicion({
         }
         return true
       })
-  }, [enrollments, filtroTablaRaza, filtroTablaGrupo, filtroTablaCategoria])
+  }, [
+    enrollments,
+    filtroTablaSoloNe,
+    filtroTablaRaza,
+    filtroTablaGrupo,
+    filtroTablaCategoria,
+  ])
 
   useEffect(() => {
     if (!String(filtroTablaGrupo ?? '').trim()) {
@@ -374,7 +390,7 @@ export function VistaAnotacionExposicion({
       return
     }
     setCategoriaTarjetaError(null)
-    if (numeracionManual) {
+    if (numeracionManualEnFormulario) {
       setNumeroTarjeta('')
     }
     if (categoriasElegiblesTarjeta.length === 1) {
@@ -385,7 +401,7 @@ export function VistaAnotacionExposicion({
     } else {
       setCategoriaSeleccionTarjeta('')
     }
-  }, [tarjetaEjemplar, categoriasElegiblesTarjeta, numeracionManual])
+  }, [tarjetaEjemplar, categoriasElegiblesTarjeta, numeracionManualEnFormulario])
 
   useEffect(() => {
     if (!tarjetaEjemplar) return
@@ -603,7 +619,7 @@ export function VistaAnotacionExposicion({
 
     /** @type {number | null} */
     let numeroAsignar = null
-    if (numeracionManual) {
+    if (numeracionManualEnFormulario) {
       const n = parseInt(String(numeroTarjeta).trim(), 10)
       if (!Number.isFinite(n) || n < 1) {
         setCategoriaTarjetaError('Indicá un número de catálogo entero ≥ 1.')
@@ -743,7 +759,11 @@ export function VistaAnotacionExposicion({
     setCategoriaEditEtiqueta(String(fila.categoria ?? ''))
     setCategoriaEdicionError(null)
     const nr = /** @type {{ numero?: unknown }} */ (fila).numero
+    const nex = Number(/** @type {{ numeros_extra?: unknown }} */ (fila).numeros_extra)
+    const neOk = Number.isFinite(nex) && nex >= 1
     const numStr =
+      neOk ? `NE ${Math.trunc(nex)}`
+      :
       nr != null && nr !== '' && Number.isFinite(Number(nr))
         ? String(Math.trunc(Number(nr)))
         : String(/** @type {{ ordinal?: unknown }} */ (fila).ordinal ?? '').trim()
@@ -802,7 +822,7 @@ export function VistaAnotacionExposicion({
       return
     }
 
-    if (numeracionManual) {
+    if (numeracionManualEnFormulario) {
       const n = parseInt(String(numeroEdicion).trim(), 10)
       if (!Number.isFinite(n) || n < 1) {
         setCategoriaEdicionError('Indicá un número de catálogo entero ≥ 1.')
@@ -830,7 +850,7 @@ export function VistaAnotacionExposicion({
       categoria: t,
       id_categoria: idCat,
     }
-    if (numeracionManual) {
+    if (numeracionManualEnFormulario) {
       const n = parseInt(String(numeroEdicion).trim(), 10)
       patch.numero = n
       patch.ordinal = String(n)
@@ -863,6 +883,7 @@ export function VistaAnotacionExposicion({
     setTextoFiltroTablaGrupo('')
     setFiltroTablaCategoria('')
     setTextoFiltroTablaCategoria('')
+    setFiltroTablaSoloNe(false)
   }
 
   function handleExportarCatalogoExcel() {
@@ -1032,7 +1053,7 @@ export function VistaAnotacionExposicion({
                   })}
                 </select>
               </label>
-              {numeracionManual ? (
+              {numeracionManualEnFormulario ? (
                 <label className="enrollment-modal__field anotacion-tarjeta-card__numero-fila">
                   <span className="anotacion-tarjeta-card__numero-tag">N.º:</span>
                   <input
@@ -1111,7 +1132,10 @@ export function VistaAnotacionExposicion({
 
   const colCount = ENROLLMENT_TABLE_COLUMNS.length + 1
   const filtrosTablaActivos = Boolean(
-    filtroTablaRaza || filtroTablaGrupo || filtroTablaCategoria,
+    filtroTablaRaza ||
+      filtroTablaGrupo ||
+      filtroTablaCategoria ||
+      filtroTablaSoloNe,
   )
   const tablaFiltrosDeshabilitados =
     catalogosCargando || catalogosError != null || enrollments.length === 0
@@ -1194,7 +1218,7 @@ export function VistaAnotacionExposicion({
                   })}
                 </select>
               </label>
-              {numeracionManual ? (
+              {numeracionManualEnFormulario ? (
                 <label className="enrollment-modal__field anotacion-tarjeta-card__numero-fila">
                   <span className="anotacion-tarjeta-card__numero-tag">N.º:</span>
                   <input
@@ -1288,7 +1312,11 @@ export function VistaAnotacionExposicion({
               {ENROLLMENT_TABLE_COLUMNS.map((col) => (
                 <div key={col} className="anotacion-tarjeta-card__row">
                   <dt>{COLUMN_LABELS[col] ?? col}</dt>
-                  <dd>{textoCeldaInscripcion(fila[col])}</dd>
+                  <dd>
+                    {col === 'numero'
+                      ? textoCeldaInscripcion(etiquetaNumeroCatalogoGrilla(fila))
+                      : textoCeldaInscripcion(fila[col])}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -1790,7 +1818,7 @@ export function VistaAnotacionExposicion({
         <div
           className="enrollment-modal__table-filters anotacion-tabla-filtros"
           role="search"
-          aria-label="Filtrar ejemplares anotados por grupo, raza o categoría"
+          aria-label="Filtrar ejemplares anotados por grupo, raza, categoría o solo números extra"
         >
           <p className="enrollment-modal__table-filters-label">Filtrar tabla</p>
           <div className="enrollment-modal__table-filters-fields">
@@ -1849,6 +1877,18 @@ export function VistaAnotacionExposicion({
                 disabled={tablaFiltrosDeshabilitados}
               />
             </label>
+            <div className="enrollment-modal__field enrollment-modal__field--ne-filter">
+              <span className="enrollment-modal__field-label">Ejemplares</span>
+              <label className="enrollment-modal__checkbox-ne">
+                <input
+                  type="checkbox"
+                  checked={filtroTablaSoloNe}
+                  onChange={(e) => setFiltroTablaSoloNe(e.target.checked)}
+                  disabled={tablaFiltrosDeshabilitados}
+                />
+                <span>Solo N.º extra (NE)</span>
+              </label>
+            </div>
             <button
               type="button"
               className="enrollment-modal__btn enrollment-modal__btn--secondary enrollment-modal__btn--compact enrollment-modal__table-filters-clear"
@@ -1927,7 +1967,9 @@ export function VistaAnotacionExposicion({
                               : undefined
                           }
                         >
-                          {textoCeldaInscripcion(row[col])}
+                          {col === 'numero'
+                            ? textoCeldaInscripcion(etiquetaNumeroCatalogoGrilla(row))
+                            : textoCeldaInscripcion(row[col])}
                         </td>
                       ))}
                       <td className="enrollment-modal__td-actions">

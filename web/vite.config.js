@@ -23,5 +23,16 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     plugins: [react()],
+    server: {
+      // Permitir entrada desde otro equipo en LAN (teléfono en la misma Wi‑Fi)
+      host: true,
+      // Redirige /api → API Node en este PC para que desde el móvil no haga falta usar localhost
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:3001',
+          changeOrigin: true,
+        },
+      },
+    },
   }
 })

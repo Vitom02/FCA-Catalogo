@@ -249,7 +249,7 @@ ${catalogoPdfCss}
 <body>
 <div class="pdf-preview-toolbar pdf-no-print">
   <button type="button" class="pdf-preview-toolbar__btn" onclick="window.print()">Descargar PDF</button>
-  <span class="pdf-preview-toolbar__hint"><strong>Hoja limpia al guardar PDF:</strong> en el cuadro de impresión desactivá <strong>Encabezados y pies de página</strong> (Chrome/Edge: «Más ajustes»; Firefox: desmarcá esas opciones). Así no se imprimen fecha, URL ni nombre del archivo arriba y abajo. Elegí <strong>Guardar como PDF</strong> o <strong>Microsoft Print to PDF</strong>.</span>
+  <span class="pdf-preview-toolbar__hint"><strong>Hoja A4:</strong> en el cuadro de impresión elegí tamaño carta/A4 si el navegador no lo respeta desde la página y desactivá <strong>Encabezados y pies de página</strong> (Chrome/Edge: «Más ajustes»). Así no se imprimen fecha, URL ni nombre del archivo arriba y abajo. Elegí <strong>Guardar como PDF</strong> o <strong>Microsoft Print to PDF</strong>.</span>
 </div>
 ${cuerpo}
 <script>

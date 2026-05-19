@@ -19,24 +19,44 @@ export function idCategoriaFromEtiqueta(categoriasApi, etiqueta) {
 }
 
 /**
- * Orden ascendente por n.º de catálogo (`numero`); filas sin número al final; desempate `id_catalogo`.
+ * Texto para columna «N.º catálogo» en grilla / export (NE = posteriores al cierre).
+ * @param {Record<string, unknown>} row enrollment (`mapCatalogoDetalleToEnrollment` o compatible)
+ */
+export function etiquetaNumeroCatalogoGrilla(row) {
+  const ne = Number(row.numeros_extra)
+  if (Number.isFinite(ne) && ne >= 1) return `NE ${Math.trunc(ne)}`
+  const num = row.numero
+  if (num != null && num !== '' && Number.isFinite(Number(num))) {
+    return String(Math.trunc(Number(num)))
+  }
+  return ''
+}
+
+/**
+ * Orden para grilla/PDF servidor: oficial con `numero` primero (asc), luego NE por `numeros_extra`, luego el resto.
  * @param {Record<string, unknown>[]} rows
  * @returns {Record<string, unknown>[]}
  */
 export function sortCatalogoDetallePorNumeroCatalogo(rows) {
   const arr = Array.isArray(rows) ? rows : []
   return [...arr].sort((a, b) => {
-    const na = Number(a.numero)
-    const nb = Number(b.numero)
-    const fa = Number.isFinite(na) && na >= 1 ? Math.trunc(na) : null
-    const fb = Number.isFinite(nb) && nb >= 1 ? Math.trunc(nb) : null
-    if (fa == null && fb == null) {
-      return (Number(a.id_catalogo) || 0) - (Number(b.id_catalogo) || 0)
+    /** @returns {{ t: number, v: number, idc: number }} */
+    function key(r) {
+      const ne = Number(r.numeros_extra)
+      if (Number.isFinite(ne) && ne >= 1) {
+        return { t: 1, v: Math.trunc(ne), idc: Number(r.id_catalogo) || 0 }
+      }
+      const n = Number(r.numero)
+      if (Number.isFinite(n) && n >= 1) {
+        return { t: 0, v: Math.trunc(n), idc: Number(r.id_catalogo) || 0 }
+      }
+      return { t: 2, v: Number(r.id_catalogo) || 0, idc: Number(r.id_catalogo) || 0 }
     }
-    if (fa == null) return 1
-    if (fb == null) return -1
-    if (fa !== fb) return fa - fb
-    return (Number(a.id_catalogo) || 0) - (Number(b.id_catalogo) || 0)
+    const ka = key(a)
+    const kb = key(b)
+    if (ka.t !== kb.t) return ka.t - kb.t
+    if (ka.v !== kb.v) return ka.v - kb.v
+    return ka.idc - kb.idc
   })
 }
 
@@ -46,10 +66,12 @@ export function sortCatalogoDetallePorNumeroCatalogo(rows) {
  */
 export function mapCatalogoDetalleToEnrollment(row) {
   const num = row.numero
-  const ord =
-    num != null && num !== '' && Number.isFinite(Number(num))
-      ? String(num)
-      : ''
+  const ne = Number(row.numeros_extra)
+  const esNe = Number.isFinite(ne) && ne >= 1
+  let ord =
+    esNe ? `NE ${Math.trunc(ne)}` :
+    num != null && num !== '' && Number.isFinite(Number(num)) ? String(num) :
+    ''
   const sexo = normalizeSexoEjemplarApi(row.sexo)
   return {
     id_catalogo: row.id_catalogo,
@@ -74,8 +96,10 @@ export function mapCatalogoDetalleToEnrollment(row) {
       row.grupo_etiqueta != null && String(row.grupo_etiqueta).trim() !== ''
         ? String(row.grupo_etiqueta)
         : '',
-    /** Copia de `c.numero` (API) para alinear con claves y fallback en tablas. */
+    /** Copia de `c.numero` (API): null en filas NE. */
     numero: row.numero,
+    /** Secuencia por exposición para inscriptos después del cierre. */
+    numeros_extra: esNe ? Math.trunc(ne) : null,
     ordinal: ord,
     registro:
       row.registro != null && row.registro !== ''

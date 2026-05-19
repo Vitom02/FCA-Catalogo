@@ -33,15 +33,30 @@ function nombreCompletoFila(u) {
   return t || '—'
 }
 
+function clubEtiquetaGrilla(u) {
+  const s = String(u.club_nombre ?? '').trim()
+  return s !== '' ? s : '—'
+}
+
+function clubAllowsAdminFc(
+  clubes /** @type {{ id_club: number, club: string, es_club_fca?: boolean }[]} */,
+  idClubRaw,
+) {
+  const id = String(idClubRaw ?? '').trim()
+  if (!id) return false
+  const c = clubes.find((x) => String(x.id_club) === id)
+  return Boolean(c?.es_club_fca)
+}
+
 /**
  * @param {{
  *   open: boolean,
  *   title: string,
  *   isEdit: boolean,
- *   initial: { nombre: string, apellido: string, usuario: string, clave: string, id_club: string },
- *   clubes: { id_club: number, club: string }[],
+ *   initial: { nombre: string, apellido: string, usuario: string, clave: string, id_club: string, esAdministrador: boolean },
+ *   clubes: { id_club: number, club: string, es_club_fca?: boolean }[],
  *   onClose: () => void,
- *   onSubmit: (f: { nombre: string, apellido: string, usuario: string, clave: string, id_club: string }) => Promise<void>,
+ *   onSubmit: (f: { nombre: string, apellido: string, usuario: string, clave: string, id_club: string, esAdministrador: boolean }) => Promise<void>,
  * }} p
  */
 function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit }) {
@@ -67,6 +82,10 @@ function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit 
   }, [open, initial, clubes])
 
   if (!open) return null
+
+  const permiteAdminEsteClub = clubAllowsAdminFc(clubes, form.id_club)
+  const adminCheckboxDisabled =
+    saving || (!permiteAdminEsteClub && (!isEdit || !form.esAdministrador))
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -163,7 +182,14 @@ function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit 
               getLabel={(c) => String(/** @type {{ club: string }} */ (c).club ?? '')}
               valueId={form.id_club}
               inputText={textoClub}
-              onValueIdChange={(id) => setForm((f) => ({ ...f, id_club: id }))}
+              onValueIdChange={(id) => {
+                const sigueFca = clubAllowsAdminFc(clubes, id)
+                setForm((f) => ({
+                  ...f,
+                  id_club: id,
+                  esAdministrador: sigueFca ? f.esAdministrador : false,
+                }))
+              }}
               onInputTextChange={setTextoClub}
               aria-label="Club; escribir para buscar, Tab completa con la primera coincidencia"
               placeholder="Buscar club; vaciar para sin club"
@@ -171,6 +197,33 @@ function ModalUsuario({ open, title, isEdit, initial, clubes, onClose, onSubmit 
               scopeSelector=".admin-user-modal__form"
               disabled={saving}
             />
+          </div>
+          <div className="admin-user-modal__field admin-user-modal__field--checkbox">
+            <label className="admin-user-modal__checkbox-label">
+              <input
+                type="checkbox"
+                checked={Boolean(form.esAdministrador)}
+                disabled={adminCheckboxDisabled}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    esAdministrador: e.target.checked,
+                  }))
+                }
+              />
+              Administrador del sistema <span className="admin-user-modal__muted">(solo club FCA)</span>
+            </label>
+            {!permiteAdminEsteClub && !form.esAdministrador ? (
+              <p className="admin-user-modal__hint">
+                Sin club FCA seleccionado no se puede otorgar el rol administrador (configurable en la API como
+                ID_CLUBES_FCA).
+              </p>
+            ) : null}
+            {isEdit && form.esAdministrador && !permiteAdminEsteClub ? (
+              <p className="admin-user-modal__hint">
+                El club actual no coincide con la lista FCA de la API. Podés bajar el rol o asignar un club FCA.
+              </p>
+            ) : null}
           </div>
           <div className="admin-user-modal__footer">
             <button
@@ -217,6 +270,7 @@ export function PaginaUsuarios({ session, clubes }) {
     usuario: '',
     clave: '',
     id_club: '',
+    esAdministrador: false,
   }))
   /** Clave tal como vino del servidor al abrir edición (para no reenviarla si no cambió). */
   const [claveOriginalEdicion, setClaveOriginalEdicion] = useState(
@@ -292,6 +346,7 @@ export function PaginaUsuarios({ session, clubes }) {
       usuario: '',
       clave: '',
       id_club: '',
+      esAdministrador: false,
     })
     setModal('add')
   }
@@ -314,6 +369,9 @@ export function PaginaUsuarios({ session, clubes }) {
         usuario: String(row.usuario ?? ''),
         clave: claveStr,
         id_club: row.id_club != null && row.id_club !== '' ? String(row.id_club) : '',
+        esAdministrador:
+          Number(/** @type {{ id_categoria?: unknown }} */ (row).id_categoria) ===
+          ID_CATEGORIA_SUPERADMIN,
       })
       setModal('edit')
     } catch (e) {
@@ -334,27 +392,30 @@ export function PaginaUsuarios({ session, clubes }) {
   }
 
   /**
-   * @param {{ nombre: string, apellido: string, usuario: string, clave: string, id_club: string }} f
+   * @param {{ nombre: string, apellido: string, usuario: string, clave: string, id_club: string, esAdministrador: boolean }} f
    */
   async function submitModal(f) {
     const idClub = f.id_club.trim() === '' ? null : Number(f.id_club)
+    const idCatEff = f.esAdministrador ? ID_CATEGORIA_SUPERADMIN : idCategoriaNormal
     if (modal === 'add') {
-      if (idCategoriaNormal == null) throw new Error('Falta categoría de usuario.')
+      if (idCategoriaNormal == null || idCatEff == null) throw new Error('Falta categoría de usuario.')
       await crearUsuario({
         nombre: f.nombre.trim(),
         apellido: f.apellido.trim(),
         usuario: f.usuario.trim(),
         clave: f.clave,
-        id_categoria: idCategoriaNormal,
+        id_categoria: idCatEff,
         id_club: idClub != null && Number.isFinite(idClub) ? idClub : null,
       })
     } else if (modal === 'edit' && editId != null) {
+      if (idCatEff == null) throw new Error('Falta categoría de usuario.')
       /** @type {Record<string, unknown>} */
       const body = {
         nombre: f.nombre.trim(),
         apellido: f.apellido.trim(),
         usuario: f.usuario.trim(),
         id_club: idClub != null && Number.isFinite(idClub) ? idClub : null,
+        id_categoria: idCatEff,
       }
       const orig = (claveOriginalEdicion ?? '').trim()
       const nueva = f.clave.trim()
@@ -447,13 +508,15 @@ export function PaginaUsuarios({ session, clubes }) {
                   <tr>
                     <th scope="col">Nombre</th>
                     <th scope="col">Usuario</th>
+                    <th scope="col">Club</th>
+                    <th scope="col">Rol</th>
                     <th scope="col">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="session-home__empty">
+                      <td colSpan={5} className="session-home__empty">
                         No hay usuarios para listar.
                       </td>
                     </tr>
@@ -470,6 +533,8 @@ export function PaginaUsuarios({ session, clubes }) {
                         <tr key={String(u.id_usuario ?? '')}>
                           <td>{nombreCompletoFila(u)}</td>
                           <td>{String(u.usuario ?? '—')}</td>
+                          <td>{clubEtiquetaGrilla(u)}</td>
+                          <td>{isAdmin ? 'Administrador' : 'Usuario'}</td>
                           <td>
                             {isSelf ? (
                               <div className="admin-usuarios__actions">
@@ -481,10 +546,6 @@ export function PaginaUsuarios({ session, clubes }) {
                                   Editar
                                 </button>
                               </div>
-                            ) : isAdmin ? (
-                              <span className="admin-usuarios__hint" title="Cuenta de administrador">
-                                —
-                              </span>
                             ) : (
                               <div className="admin-usuarios__actions">
                                 <button
@@ -494,13 +555,15 @@ export function PaginaUsuarios({ session, clubes }) {
                                 >
                                   Editar
                                 </button>
-                                <button
-                                  type="button"
-                                  className="session-home__btn session-home__btn--secondary admin-usuarios__btn--small"
-                                  onClick={() => handleEliminar(u)}
-                                >
-                                  Dar Baja
-                                </button>
+                                {!isAdmin ? (
+                                  <button
+                                    type="button"
+                                    className="session-home__btn session-home__btn--secondary admin-usuarios__btn--small"
+                                    onClick={() => handleEliminar(u)}
+                                  >
+                                    Dar Baja
+                                  </button>
+                                ) : null}
                               </div>
                             )}
                           </td>

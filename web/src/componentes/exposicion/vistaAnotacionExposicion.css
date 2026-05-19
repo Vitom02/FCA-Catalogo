@@ -6,6 +6,8 @@
   gap: 12px;
   min-height: 0;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   color: var(--card-text);
   text-align: left;
 }
@@ -143,6 +145,32 @@
 }
 
 .enrollment-modal__table-filters-clear {
+  flex-shrink: 0;
+}
+
+.anotacion-page .enrollment-modal__table-filters .enrollment-modal__field--ne-filter {
+  flex: 0 1 200px;
+  min-width: 160px;
+  align-self: flex-end;
+}
+
+.anotacion-page .enrollment-modal__checkbox-ne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--card-text);
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 0;
+}
+
+.anotacion-page .enrollment-modal__checkbox-ne input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
   flex-shrink: 0;
 }
 
@@ -455,6 +483,9 @@
   flex: 1;
   min-height: 320px;
   overflow: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   border-radius: 8px;
   border: 1px solid var(--table-grid);
 }
@@ -553,8 +584,12 @@
   }
 
   .anotacion-nombre-dialog {
-    height: min(92vh, 960px);
-    max-height: min(92vh, 960px);
+    height: min(92vh, calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px), 960px);
+    max-height: min(
+      92vh,
+      calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px),
+      960px
+    );
   }
 }
 
@@ -566,9 +601,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(16px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(2px);
+  box-sizing: border-box;
 }
 
 .anotacion-edit-cat-dialog {
@@ -615,15 +654,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(16px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(2px);
+  box-sizing: border-box;
 }
 
 .anotacion-nombre-dialog {
-  width: min(1200px, calc(100vw - 32px));
+  width: 100%;
+  max-width: min(1200px, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 8px));
   height: min(90vh, 960px);
-  max-height: min(90vh, 960px);
+  max-height: min(90vh, calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px));
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -709,6 +753,17 @@
   border-left: 1px solid var(--input-border);
 }
 
+@media (max-width: 520px) {
+  .anotacion-nombre-split {
+    grid-template-columns: 1fr;
+  }
+
+  .anotacion-nombre-split__half + .anotacion-nombre-split__half {
+    border-left: none;
+    border-top: 1px solid var(--input-border);
+  }
+}
+
 .anotacion-nombre-split__half:hover {
   background: #f1f5f9;
   color: var(--card-text);
@@ -768,6 +823,8 @@
   flex: 1 1 0;
   min-height: 12rem;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   border-radius: 8px;
   border: 1px solid var(--table-grid);
 }

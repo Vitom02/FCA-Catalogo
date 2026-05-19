@@ -134,7 +134,10 @@ export async function crear(req, res) {
     }
     const tipoNum = Number(expo.tipo_numeracion);
     const numRaw = b.numero;
-    if (tipoNum === 1) {
+    const idEstado = Number(expo.id_estado);
+    const torneoAbierto = idEstado === 1;
+
+    if (tipoNum === 1 && torneoAbierto) {
       if (numRaw === undefined || numRaw === null || numRaw === "") {
         res.status(400).json({
           error:
@@ -178,6 +181,10 @@ export async function actualizar(req, res) {
     res.json(row);
   } catch (err) {
     if (err && err.code === "CATALOGOS_NUMERO_DUPLICADO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err && err.code === "CATALOGOS_NUMERO_EXTRA_BLOQUEADO") {
       res.status(400).json({ error: err.message });
       return;
     }

@@ -227,7 +227,14 @@ export function compararEjemplarNumeroCatalogoDesc(a, b) {
 export function lineaEjemplarCatalogoPdfPorDefecto(row, opts = {}) {
   const sep = ' - '
   const incluirNro = opts.incluirPrefijoNumeroCatalogo !== false
-  const nro = row?.numero != null && row.numero !== '' ? String(row.numero).trim() : ''
+  const neRaw = row?.numeros_extra
+  const neNum = Number(neRaw)
+  const nro =
+    Number.isFinite(neNum) && neNum >= 1
+      ? `NE ${Math.trunc(neNum)}`
+      : row?.numero != null && row.numero !== ''
+        ? String(row.numero).trim()
+        : ''
   const nom = String(row?.nombre_completo ?? '').trim()
   const reg = String(row?.registro ?? '').trim()
   const sexFull = String(row?.sexo ?? '').trim()
@@ -471,8 +478,9 @@ export function filasDetalleEnOrdenCatalogoPdf(filas) {
 }
 
 /**
- * Convierte filas del detalle de catálogo en páginas PDF (una hoja **por macro-sección**:
+ * Convierte filas del detalle de catálogo en **bloques** para PDF (uno por macro-sección:
  * ADULTOS, JÓVENES, VETERANOS, CACHORROS, CACHORROS ESPECIALES; al final **OTRAS CATEGORÍAS** si hay ids fuera de lista).
+ * Cada bloque tiene `page-break-after` respecto del siguiente; al imprimir/guardar como PDF cada bloque puede **ocupar varias hojas A4** si el contenido lo requiere.
  *
  * @param {Record<string, unknown>[]} filas
  * @param {{
