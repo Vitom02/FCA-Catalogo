@@ -103,6 +103,27 @@ function compararEjemplarPdfMachoPrimeroMasAdultoPrimero(a, b) {
   return ib - ia;
 }
 
+function claveVariedadDesdeFila(row) {
+  const idV = Number(row.id_variedad);
+  if (Number.isFinite(idV) && idV >= 1) return `id-${idV}`;
+  const cod = String(row.codigo_variedad ?? "").trim();
+  if (cod) return `cod-${cod}`;
+  return "var-sin";
+}
+
+function compararVariedadPdf(a, b) {
+  const oa = Number(a.variedad_ordinal);
+  const ob = Number(b.variedad_ordinal);
+  const fa = Number.isFinite(oa) ? oa : 9999;
+  const fb = Number.isFinite(ob) ? ob : 9999;
+  if (fa !== fb) return fa - fb;
+  return String(a.etiqueta_variedad ?? "").localeCompare(
+    String(b.etiqueta_variedad ?? ""),
+    "es",
+    { sensitivity: "base" }
+  );
+}
+
 function insertarFilaEnPorGrupo(porGrupo, row) {
   const r = row && typeof row === "object" ? row : {};
   const idG = Number(r.id_grupo);
@@ -114,6 +135,12 @@ function insertarFilaEnPorGrupo(porGrupo, row) {
   const idC = Number(r.id_categoria);
   const cKey = Number.isFinite(idC) ? idC : 0;
   const cLabel = String(r.categoria_etiqueta ?? "—").trim() || "—";
+  const vk = claveVariedadDesdeFila(r);
+  const vLabel = String(r.codigo_variedad ?? "").trim();
+  const vOrdRaw = Number(r.variedad_ordinal);
+  const vOrd = Number.isFinite(vOrdRaw) ? vOrdRaw : 9999;
+  const idVRaw = Number(r.id_variedad);
+  const idV = Number.isFinite(idVRaw) && idVRaw >= 1 ? idVRaw : 0;
 
   const gk = String(gKey);
   if (!porGrupo.has(gk)) {
@@ -129,19 +156,28 @@ function insertarFilaEnPorGrupo(porGrupo, row) {
     gNode.razas.set(rk, {
       id_raza: rKey,
       etiqueta_raza: rLabel,
-      categorias: new Map(),
+      variedades: new Map(),
     });
   }
   const rNode = gNode.razas.get(rk);
+  if (!rNode.variedades.has(vk)) {
+    rNode.variedades.set(vk, {
+      id_variedad: idV,
+      etiqueta_variedad: vLabel,
+      variedad_ordinal: vOrd,
+      categorias: new Map(),
+    });
+  }
+  const vNode = rNode.variedades.get(vk);
   const ck = String(cKey);
-  if (!rNode.categorias.has(ck)) {
-    rNode.categorias.set(ck, {
+  if (!vNode.categorias.has(ck)) {
+    vNode.categorias.set(ck, {
       id_categoria: cKey,
       categoria_etiqueta: cLabel,
       filas: [],
     });
   }
-  rNode.categorias.get(ck).filas.push(r);
+  vNode.categorias.get(ck).filas.push(r);
 }
 
 function categoriasEnOrdenPorIds(categoriasMap, idsOrden) {
@@ -181,15 +217,18 @@ export function filasDetalleEnOrdenCatalogoPdf(filas) {
     for (const g of gruposOrdenados) {
       const razasArr = [...g.razas.values()].sort(compararRazaAlfabetico);
       for (const rz of razasArr) {
-        const catsArr = ordenOrdinalFallback
-          ? [...rz.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
-          : categoriasEnOrdenPorIds(rz.categorias, idsOrdenCategorias);
-        for (const c of catsArr) {
-          const ordenadas = [...c.filas].sort(
-            compararEjemplarPdfMachoPrimeroMasAdultoPrimero,
-          );
-          for (const fila of ordenadas) {
-            out.push(fila);
+        const variedadesArr = [...rz.variedades.values()].sort(compararVariedadPdf);
+        for (const vr of variedadesArr) {
+          const catsArr = ordenOrdinalFallback
+            ? [...vr.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
+            : categoriasEnOrdenPorIds(vr.categorias, idsOrdenCategorias);
+          for (const c of catsArr) {
+            const ordenadas = [...c.filas].sort(
+              compararEjemplarPdfMachoPrimeroMasAdultoPrimero,
+            );
+            for (const fila of ordenadas) {
+              out.push(fila);
+            }
           }
         }
       }

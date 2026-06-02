@@ -1,7 +1,7 @@
 /**
  * Orden y agrupación del catálogo para PDF:
  * Por **macro-sección** (ADULTOS → JÓVENES → VETERANOS → CACHORROS → CACHORROS ESPECIALES):
- * en cada una se mantiene **grupo FCI → raza (alfabético) → categorías de esa sección** (orden fijo por `id_categoria`).
+ * en cada una se mantiene **grupo FCI → raza (alfabético) → variedad (`codigo_variedad`, `ordinal`) → categorías** (orden fijo por `id_categoria`).
  * Dentro de cada categoría, los ejemplares van **primero machos, luego hembras**; dentro de cada sexo,
  * **el más adulto primero** (fecha de nacimiento más antigua). Desempate: n.º de catálogo descendente, luego `id_catalogo`.
  *
@@ -339,7 +339,59 @@ function mergeInfoRazaPdf(filaMuestra, idRaza, opciones) {
 }
 
 /**
- * @param {Map<string, { id_grupo: number, grupo_etiqueta: string, razas: Map<string, { id_raza: number, etiqueta_raza: string, categorias: Map<string, { id_categoria: number, categoria_etiqueta: string, filas: Record<string, unknown>[] }> }> }>} porGrupo
+ * @param {Record<string, unknown>} row
+ */
+function claveVariedadDesdeFila(row) {
+  const idV = Number(row.id_variedad)
+  if (Number.isFinite(idV) && idV >= 1) return `id-${idV}`
+  const cod = String(row.codigo_variedad ?? '').trim()
+  if (cod) return `cod-${cod}`
+  return 'var-sin'
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ */
+function etiquetaVariedadDesdeFila(row) {
+  return String(row.codigo_variedad ?? '').trim()
+}
+
+/**
+ * @param {{ variedad_ordinal?: unknown, etiqueta_variedad?: string }} a
+ * @param {{ variedad_ordinal?: unknown, etiqueta_variedad?: string }} b
+ */
+function compararVariedadPdf(a, b) {
+  const oa = Number(a.variedad_ordinal)
+  const ob = Number(b.variedad_ordinal)
+  const fa = Number.isFinite(oa) ? oa : 9999
+  const fb = Number.isFinite(ob) ? ob : 9999
+  if (fa !== fb) return fa - fb
+  return String(a.etiqueta_variedad ?? '').localeCompare(
+    String(b.etiqueta_variedad ?? ''),
+    'es',
+    { sensitivity: 'base' },
+  )
+}
+
+/**
+ * @param {Map<string, { id_categoria: number, categoria_etiqueta: string, filas: Record<string, unknown>[] }>} categoriasMap
+ * @param {number[]} idsOrden
+ */
+function recolectarFilasVariedad(categoriasMap, idsOrden, ordenOrdinalFallback) {
+  const catsArr = ordenOrdinalFallback
+    ? [...categoriasMap.values()].sort(compararCategoriaPorOrdinalEnNombre)
+    : categoriasEnOrdenPorIds(categoriasMap, idsOrden)
+  /** @type {Record<string, unknown>[]} */
+  const out = []
+  for (const c of catsArr) {
+    const ordenadas = [...c.filas].sort(compararEjemplarPdfMachoPrimeroMasAdultoPrimero)
+    out.push(...ordenadas)
+  }
+  return out
+}
+
+/**
+ * @param {Map<string, { id_grupo: number, grupo_etiqueta: string, razas: Map<string, { id_raza: number, etiqueta_raza: string, variedades: Map<string, { id_variedad: number, etiqueta_variedad: string, variedad_ordinal: number, categorias: Map<string, { id_categoria: number, categoria_etiqueta: string, filas: Record<string, unknown>[] }> }> }> }>} porGrupo
  * @param {Record<string, unknown>} row
  */
 function insertarFilaEnPorGrupo(porGrupo, row) {
@@ -353,6 +405,12 @@ function insertarFilaEnPorGrupo(porGrupo, row) {
   const idC = Number(r.id_categoria)
   const cKey = Number.isFinite(idC) ? idC : 0
   const cLabel = String(r.categoria_etiqueta ?? '—').trim() || '—'
+  const vk = claveVariedadDesdeFila(r)
+  const vLabel = etiquetaVariedadDesdeFila(r)
+  const vOrdRaw = Number(r.variedad_ordinal)
+  const vOrd = Number.isFinite(vOrdRaw) ? vOrdRaw : 9999
+  const idVRaw = Number(r.id_variedad)
+  const idV = Number.isFinite(idVRaw) && idVRaw >= 1 ? idVRaw : 0
 
   const gk = String(gKey)
   if (!porGrupo.has(gk)) {
@@ -368,19 +426,28 @@ function insertarFilaEnPorGrupo(porGrupo, row) {
     gNode.razas.set(rk, {
       id_raza: rKey,
       etiqueta_raza: rLabel,
-      categorias: new Map(),
+      variedades: new Map(),
     })
   }
   const rNode = gNode.razas.get(rk)
+  if (!rNode.variedades.has(vk)) {
+    rNode.variedades.set(vk, {
+      id_variedad: idV,
+      etiqueta_variedad: vLabel,
+      variedad_ordinal: vOrd,
+      categorias: new Map(),
+    })
+  }
+  const vNode = rNode.variedades.get(vk)
   const ck = String(cKey)
-  if (!rNode.categorias.has(ck)) {
-    rNode.categorias.set(ck, {
+  if (!vNode.categorias.has(ck)) {
+    vNode.categorias.set(ck, {
       id_categoria: cKey,
       categoria_etiqueta: cLabel,
       filas: [],
     })
   }
-  rNode.categorias.get(ck).filas.push(r)
+  vNode.categorias.get(ck).filas.push(r)
 }
 
 /**
@@ -405,7 +472,7 @@ function categoriasEnOrdenPorIds(categoriasMap, idsOrden) {
 }
 
 /**
- * Misma sucesión de filas que el PDF del catálogo (macro-sección → grupo → raza → categoría → ejemplares).
+ * Misma sucesión de filas que el PDF (macro-sección → grupo → raza → variedad → categoría → ejemplares).
  * Incluye al final las filas que no entraron en ninguna sección (p. ej. `id_categoria` inválido), por `id_catalogo`.
  *
  * @param {Record<string, unknown>[]} filas
@@ -433,14 +500,15 @@ export function filasDetalleEnOrdenCatalogoPdf(filas) {
     for (const g of gruposOrdenados) {
       const razasArr = [...g.razas.values()].sort(compararRazaAlfabetico)
       for (const rz of razasArr) {
-        const catsArr = ordenOrdinalFallback
-          ? [...rz.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
-          : categoriasEnOrdenPorIds(rz.categorias, idsOrdenCategorias)
-        for (const c of catsArr) {
-          const ordenadas = [...c.filas].sort(compararEjemplarPdfMachoPrimeroMasAdultoPrimero)
-          for (const fila of ordenadas) {
-            out.push(fila)
-          }
+        const variedadesArr = [...rz.variedades.values()].sort(compararVariedadPdf)
+        for (const vr of variedadesArr) {
+          out.push(
+            ...recolectarFilasVariedad(
+              vr.categorias,
+              idsOrdenCategorias,
+              ordenOrdinalFallback,
+            ),
+          )
         }
       }
     }
@@ -538,33 +606,53 @@ export function filasDetalleAPaginasPdf(filas, opciones = {}) {
       const seccionesGrupo = []
 
       for (const rz of razasArr) {
-        const catsArr = ordenOrdinalFallback
-          ? [...rz.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
-          : categoriasEnOrdenPorIds(rz.categorias, idsOrdenCategorias)
+        const variedadesArr = [...rz.variedades.values()].sort(compararVariedadPdf)
+        /** @type {import('./exportCatalogoPdf.js').CatalogoPdfVariedadBloque[]} */
+        const variedades = []
 
-        /** @type {import('./exportCatalogoPdf.js').CatalogoPdfCategoriaBloque[]} */
-        const categorias = []
-        for (const c of catsArr) {
-          const ordenadas = [...c.filas].sort(compararEjemplarPdfMachoPrimeroMasAdultoPrimero)
-          const lineas = ordenadas
-            .map((fila) => lineaEjemplar(fila))
-            .filter((s) => String(s).trim() !== '')
-          const etiqueta = c.categoria_etiqueta
-            ? `CATEGORIA: ${c.categoria_etiqueta}`
-            : 'CATEGORIA: —'
-          categorias.push({ etiqueta, lineas })
+        for (const vr of variedadesArr) {
+          const catsArr = ordenOrdinalFallback
+            ? [...vr.categorias.values()].sort(compararCategoriaPorOrdinalEnNombre)
+            : categoriasEnOrdenPorIds(vr.categorias, idsOrdenCategorias)
+
+          /** @type {import('./exportCatalogoPdf.js').CatalogoPdfCategoriaBloque[]} */
+          const categorias = []
+          for (const c of catsArr) {
+            const ordenadas = [...c.filas].sort(
+              compararEjemplarPdfMachoPrimeroMasAdultoPrimero,
+            )
+            const lineas = ordenadas
+              .map((fila) => lineaEjemplar(fila))
+              .filter((s) => String(s).trim() !== '')
+            const etiqueta = c.categoria_etiqueta
+              ? `CATEGORIA: ${c.categoria_etiqueta}`
+              : 'CATEGORIA: —'
+            categorias.push({ etiqueta, lineas })
+          }
+
+          const codVar = String(vr.etiqueta_variedad ?? '').trim()
+          const mostrarVariedad =
+            codVar !== '' || variedadesArr.length > 1
+          variedades.push({
+            etiqueta: mostrarVariedad ? codVar || '—' : '',
+            categorias,
+          })
         }
 
-        const filaMuestra =
-          catsArr.length > 0 && catsArr[0].filas.length > 0
-            ? catsArr[0].filas[0]
-            : undefined
+        const filaMuestra = (() => {
+          for (const vr of variedadesArr) {
+            for (const c of vr.categorias.values()) {
+              if (c.filas.length > 0) return c.filas[0]
+            }
+          }
+          return undefined
+        })()
         const info = mergeInfoRazaPdf(filaMuestra, rz.id_raza, opciones)
 
         seccionesGrupo.push({
           nombreRaza: rz.etiqueta_raza,
           info,
-          categorias,
+          variedades,
         })
       }
 

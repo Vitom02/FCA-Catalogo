@@ -3,7 +3,9 @@
 # 1. cp .env.docker.example .env  y definí POSTGRES_PASSWORD
 # 2. docker compose up -d db
 # 3. docker compose run --rm api node scripts/migrate.mjs
-# 4. docker compose up -d
+# 4. (opcional) variedades: copiá variedades.csv y ejemplares_variedades.csv en api/migrations/data/, rebuild api si cambian, luego:
+#    docker compose run --rm api npm run db:seed-variedades
+# 5. docker compose up -d
 #
 # Web en http://IP_O_DOMINIO  ·  API vía mismo host en /api/...  ·  /health para la API
 

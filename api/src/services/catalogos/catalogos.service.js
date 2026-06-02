@@ -210,6 +210,9 @@ export async function listarPorExposicionDetalle(idExposicion) {
          )
        END AS grupo_etiqueta,
        COALESCE(e.registro::VARCHAR, e.registro_origen::VARCHAR) AS registro,
+       COALESCE(e.id_variedad, evb.id_variedad) AS id_variedad,
+       NULLIF(TRIM(COALESCE(v.codigo_variedad, '')), '') AS codigo_variedad,
+       COALESCE(v.ordinal, 9999)::int AS variedad_ordinal,
        NULLIF(TRIM(COALESCE(e.microchip, '')), '') AS microchip,
        NULLIF(TRIM(COALESCE(r.funcion, '')), '') AS raza_funcion,
        NULLIF(TRIM(COALESCE(r.descripcion, '')), '') AS raza_descripcion,
@@ -233,6 +236,11 @@ export async function listarPorExposicionDetalle(idExposicion) {
      LEFT JOIN web.federaciones f ON f.id_federacion = e.id_federacion
      LEFT JOIN web.federaciones fo ON fo.id_federacion = e.id_federacion_origen
      JOIN web.razas r ON r.id_raza = e.id_raza
+     LEFT JOIN web.ejemplares_variedades evb ON
+       evb.codigo_raza = COALESCE(NULLIF(TRIM(e.codigo_raza), ''), r.codigo_raza)
+       AND evb.codigo_pais = COALESCE(f.codigo_pais, fo.codigo_pais, e.codigo_pais)
+       AND evb.registro = e.registro
+     LEFT JOIN web.variedades v ON v.id_variedad = COALESCE(e.id_variedad, evb.id_variedad)
      LEFT JOIN web.paises pai ON pai.id_pais = r.id_pais
      LEFT JOIN web.ejemplares ep ON ep.id_ejemplar = e.id_ejemplar_padre
      LEFT JOIN web.ejemplares em ON em.id_ejemplar = e.id_ejemplar_madre

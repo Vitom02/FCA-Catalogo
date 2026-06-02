@@ -31,7 +31,12 @@ export {
  */
 
 /**
- * @typedef {{ nombreRaza: string, info?: CatalogoPdfRazaInfo, categorias: CatalogoPdfCategoriaBloque[] }} CatalogoPdfSeccionRaza
+ * @typedef {{ etiqueta: string, categorias: CatalogoPdfCategoriaBloque[] }} CatalogoPdfVariedadBloque
+ * `etiqueta` = `codigo_variedad` (vacío = no imprimir título VARIEDAD si hay una sola variedad sin código).
+ */
+
+/**
+ * @typedef {{ nombreRaza: string, info?: CatalogoPdfRazaInfo, variedades: CatalogoPdfVariedadBloque[], categorias?: CatalogoPdfCategoriaBloque[] }} CatalogoPdfSeccionRaza
  */
 
 /**
@@ -114,33 +119,58 @@ function resaltarNumeroInicioLinea(rawLine) {
 }
 
 /**
+ * @param {CatalogoPdfCategoriaBloque[]} categorias
+ */
+function htmlBloquesCategorias(categorias) {
+  return categorias
+    .map((cat) => {
+      const etiqueta = String(cat.etiqueta ?? '').trim()
+      const lineas = Array.isArray(cat.lineas) ? cat.lineas : []
+      const items = lineas
+        .map((linea) => {
+          const t = String(linea ?? '').trim()
+          return t ? resaltarNumeroInicioLinea(t) : ''
+        })
+        .filter(Boolean)
+        .join('')
+      if (!etiqueta && !items) return ''
+      const tituloCat = etiqueta
+        ? `<h3 class="pdf-category">${escapeHtml(etiqueta)}</h3>`
+        : ''
+      const lista = items ? `<div class="pdf-entries">${items}</div>` : ''
+      return tituloCat + lista
+    })
+    .join('\n')
+}
+
+/**
  * @param {CatalogoPdfSeccionRaza} seccion
  * @param {boolean} esPrimera
  */
 function htmlSeccionRaza(seccion, esPrimera) {
   const nombre = String(seccion.nombreRaza ?? '').trim() || '—'
   const info = seccion.info ?? {}
-  const categorias = Array.isArray(seccion.categorias) ? seccion.categorias : []
+  const variedadesIn = Array.isArray(seccion.variedades) ? seccion.variedades : []
+  const variedades =
+    variedadesIn.length > 0
+      ? variedadesIn
+      : [{ etiqueta: '', categorias: Array.isArray(seccion.categorias) ? seccion.categorias : [] }]
 
   const attrSeccion = esPrimera ? '' : ' class="pdf-section"'
 
-  const partesCategorias = categorias.map((cat) => {
-    const etiqueta = String(cat.etiqueta ?? '').trim()
-    const lineas = Array.isArray(cat.lineas) ? cat.lineas : []
-    const items = lineas
-      .map((linea) => {
-        const t = String(linea ?? '').trim()
-        return t ? resaltarNumeroInicioLinea(t) : ''
-      })
-      .filter(Boolean)
-      .join('')
-    if (!etiqueta && !items) return ''
-    const tituloCat = etiqueta
-      ? `<h3 class="pdf-category">${escapeHtml(etiqueta)}</h3>`
-      : ''
-    const lista = items ? `<div class="pdf-entries">${items}</div>` : ''
-    return tituloCat + lista
-  })
+  const partesVariedades = variedades
+    .map((vr) => {
+      const cod = String(vr.etiqueta ?? '').trim()
+      const cats = Array.isArray(vr.categorias) ? vr.categorias : []
+      const cuerpo = htmlBloquesCategorias(cats)
+      if (!cuerpo) return ''
+      const tituloVar =
+        cod !== ''
+          ? `<h3 class="pdf-variety">VARIEDAD: ${escapeHtml(cod)}</h3>`
+          : ''
+      return tituloVar + cuerpo
+    })
+    .join('\n')
 
   return `
 <section${attrSeccion}>
@@ -152,7 +182,7 @@ function htmlSeccionRaza(seccion, esPrimera) {
       ${bloqueInfo({ label: 'Características:', texto: info.caracteristicas ?? '' })}
     </div>
   </div>
-  ${partesCategorias.join('\n')}
+  ${partesVariedades}
 </section>`.trim()
 }
 
@@ -185,7 +215,7 @@ export function buildCatalogoPdfPaginaHtml(pagina, meta = {}) {
   for (const bloque of grupos) {
     const tituloGrupo = String(bloque?.tituloGrupo ?? '').trim()
     if (tituloGrupo) {
-      partes.push(`<h3 class="pdf-group">${escapeHtml(tituloGrupo)}</h3>`)
+      partes.push(`<h3 class="pdf-group">GRUPO: ${escapeHtml(tituloGrupo)}</h3>`)
     }
     const secciones = Array.isArray(bloque?.secciones) ? bloque.secciones : []
     for (const sec of secciones) {

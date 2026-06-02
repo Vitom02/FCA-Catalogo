@@ -204,7 +204,18 @@ html {
   text-transform: none;
 }
 
-/* «CATEGORIA: …» — secundaria respecto a la raza */
+/* «VARIEDAD: …» — debajo de la raza, antes de las categorías de clase */
+.pdf-variety {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin: 10px 0 6px;
+  letter-spacing: 0.03em;
+  color: #222;
+}
+
+/* «CATEGORIA: …» — secundaria respecto a la variedad */
 .pdf-category {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 9pt;
