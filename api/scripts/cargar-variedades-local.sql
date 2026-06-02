@@ -117,6 +117,11 @@ SET id_raza = r.id_raza
 FROM web.razas r
 WHERE r.codigo_raza = v.codigo_raza;
 
+SELECT setval(
+  pg_get_serial_sequence('web.variedades', 'id_variedad'),
+  COALESCE((SELECT MAX(id_variedad) FROM web.variedades), 1)
+);
+
 UPDATE web.ejemplares e
 SET id_variedad = ev.id_variedad
 FROM web.ejemplares_variedades ev

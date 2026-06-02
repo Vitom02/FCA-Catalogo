@@ -89,6 +89,16 @@ async function readCsv(filePath, onRow, skipHeader = 1) {
  * @param {string} sql
  * @param {unknown[][]} rows
  */
+/** Tras INSERT con id_variedad explícito, la secuencia SERIAL queda desfasada. */
+async function syncVariedadesSequence(client) {
+  await client.query(
+    `SELECT setval(
+       pg_get_serial_sequence('web.variedades', 'id_variedad'),
+       COALESCE((SELECT MAX(id_variedad) FROM web.variedades), 1)
+     )`,
+  );
+}
+
 async function insertBatches(client, sql, rows) {
   for (let i = 0; i < rows.length; i += BATCH) {
     const chunk = rows.slice(i, i + BATCH);
@@ -172,6 +182,8 @@ async function main() {
        WHERE r.codigo_raza = v.codigo_raza`
     );
 
+    await syncVariedadesSequence(client);
+
     await client.query("TRUNCATE web.ejemplares_variedades");
 
     /** @type {unknown[][]} */
@@ -228,12 +240,7 @@ async function main() {
     );
     console.log(`→ variedades “vacías” para razas sin variedad: ${ins.rowCount ?? 0}`);
 
-    await client.query(
-      `SELECT setval(
-         pg_get_serial_sequence('web.variedades', 'id_variedad'),
-         COALESCE((SELECT MAX(id_variedad) FROM web.variedades), 1)
-       )`
-    );
+    await syncVariedadesSequence(client);
 
     await client.query("COMMIT");
     console.log("Carga de variedades finalizada.");
