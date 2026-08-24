@@ -23,6 +23,21 @@ export function matchUnicoEtiqueta(items, getLabel, queryRaw) {
 }
 
 /**
+ * @param {unknown[]} items
+ * @param {(item: unknown) => string | number} getId
+ * @param {(item: unknown) => string} getLabel
+ * @param {string} valueId
+ * @param {string} inputText
+ */
+function etiquetaSeleccionadaActual(items, getId, getLabel, valueId, inputText) {
+  if (!valueId) return null
+  const item = items.find((it) => String(getId(it)) === String(valueId))
+  if (!item) return null
+  const etiqueta = getLabel(item)
+  return String(inputText) === String(etiqueta) ? etiqueta : null
+}
+
+/**
  * @param {Element} current
  * @param {string} scopeSelector
  */
@@ -45,6 +60,8 @@ function focusSiguienteEnAlcance(current, scopeSelector) {
 /**
  * Texto + datalist; Tab completa con la primera opción cuyo texto incluye lo escrito
  * (si hay una sola coincidencia, es esa; si hay varias, la primera de la lista).
+ * Tras completar (id + texto = etiqueta), el campo se bloquea a escritura; un clic
+ * selecciona todo el texto para borrarlo de una vez.
  * @param {{
  *   items: unknown[],
  *   getId: (item: unknown) => string | number,
@@ -75,14 +92,31 @@ export function BusquedaSelectTipo({
   disabled = false,
 }) {
   const listId = useId()
+  const completo =
+    !disabled &&
+    etiquetaSeleccionadaActual(items, getId, getLabel, valueId, inputText) != null
+  const classNames = [
+    className,
+    completo ? 'busqueda-select-tipo--completo' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <>
       <input
         type="text"
-        className={className}
+        className={classNames}
         value={inputText}
         onChange={(e) => {
           const v = e.target.value
+          if (completo) {
+            if (v === '') {
+              onInputTextChange('')
+              onValueIdChange('')
+            }
+            return
+          }
           onInputTextChange(v)
           const exact = items.find((it) => getLabel(it) === v)
           if (exact) {
@@ -97,8 +131,23 @@ export function BusquedaSelectTipo({
           const cur = items.find((it) => String(getId(it)) === String(curId))
           if (!cur || getLabel(cur) !== v) onValueIdChange('')
         }}
+        onMouseDown={(e) => {
+          if (!completo || !(e.currentTarget instanceof HTMLInputElement)) return
+          e.preventDefault()
+          const el = e.currentTarget
+          el.focus()
+          el.select()
+        }}
         onKeyDown={(e) => {
           if (disabled) return
+          if (completo) {
+            const teclaImprime =
+              e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+            if (teclaImprime) {
+              e.preventDefault()
+              return
+            }
+          }
           if (e.key !== 'Tab' || e.shiftKey) return
           const t = String(inputText ?? '').trim()
           const exact = t !== '' ? items.find((it) => getLabel(it) === t) : null
@@ -119,11 +168,12 @@ export function BusquedaSelectTipo({
             requestAnimationFrame(() => focusSiguienteEnAlcance(el, scopeSelector))
           }
         }}
-        list={listId}
+        list={completo ? undefined : listId}
         autoComplete="off"
         disabled={disabled}
         aria-label={ariaLabel}
         placeholder={placeholder}
+        aria-readonly={completo || undefined}
       />
       <datalist id={listId}>
         {items.map((it) => (

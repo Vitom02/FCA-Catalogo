@@ -584,8 +584,30 @@
   display: grid;
   grid-template-columns: 1fr 34px;
   gap: 6px;
-  align-items: stretch;
+  align-items: start;
   min-width: 0;
+}
+
+.expo-add-modal__organizador-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+
+.expo-add-modal__club-split-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.expo-add-modal__club-sublabel {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--card-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .expo-add-modal__club-grid-row--principal {

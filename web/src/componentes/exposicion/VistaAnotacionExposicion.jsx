@@ -131,7 +131,7 @@ function etiquetaRaza(r) {
  *   catalogosCargando?: boolean,
  *   catalogosError?: string | null,
  *   catalogoDetalleFilas?: Record<string, unknown>[] | null,
- *   onCerrarTorneoYNumerar?: () => Promise<void>,
+ *   onNumerarCatalogo?: () => Promise<void>,
  * }} props
  */
 export function VistaAnotacionExposicion({
@@ -142,7 +142,7 @@ export function VistaAnotacionExposicion({
   onAddEnrollment,
   onUpdateEnrollment,
   onRemoveEnrollment,
-  onCerrarTorneoYNumerar,
+  onNumerarCatalogo,
   catalogosCargando = false,
   catalogosError = null,
 }) {
@@ -195,8 +195,8 @@ export function VistaAnotacionExposicion({
     /** @type {number | null} */ (null),
   )
   const [pdfPreparando, setPdfPreparando] = useState(false)
-  const [cerrarNumerarLoading, setCerrarNumerarLoading] = useState(false)
-  const [confirmarCerrarNumerarOpen, setConfirmarCerrarNumerarOpen] = useState(false)
+  const [numerarLoading, setNumerarLoading] = useState(false)
+  const [confirmarNumerarOpen, setConfirmarNumerarOpen] = useState(false)
 
   const [filtroTablaRaza, setFiltroTablaRaza] = useState('')
   const [textoFiltroTablaRaza, setTextoFiltroTablaRaza] = useState('')
@@ -902,8 +902,8 @@ export function VistaAnotacionExposicion({
       })
   }
 
-  function handleCerrarTorneoYNumerarClick() {
-    if (onCerrarTorneoYNumerar == null) return
+  function handleNumerarCatalogoClick() {
+    if (onNumerarCatalogo == null) return
     if (
       catalogosCargando ||
       catalogosError != null ||
@@ -912,21 +912,21 @@ export function VistaAnotacionExposicion({
     ) {
       return
     }
-    setConfirmarCerrarNumerarOpen(true)
+    setConfirmarNumerarOpen(true)
   }
 
-  function cerrarConfirmarCerrarNumerar() {
-    setConfirmarCerrarNumerarOpen(false)
+  function cerrarConfirmarNumerar() {
+    setConfirmarNumerarOpen(false)
   }
 
-  async function ejecutarConfirmarCerrarTorneoYNumerar() {
-    if (onCerrarTorneoYNumerar == null) return
-    setConfirmarCerrarNumerarOpen(false)
-    setCerrarNumerarLoading(true)
+  async function ejecutarConfirmarNumerar() {
+    if (onNumerarCatalogo == null) return
+    setConfirmarNumerarOpen(false)
+    setNumerarLoading(true)
     try {
-      await onCerrarTorneoYNumerar()
+      await onNumerarCatalogo()
     } finally {
-      setCerrarNumerarLoading(false)
+      setNumerarLoading(false)
     }
   }
 
@@ -1342,18 +1342,15 @@ export function VistaAnotacionExposicion({
     )
   }
 
-  function renderConfirmarCerrarNumerarModal() {
-    if (!confirmarCerrarNumerarOpen || onCerrarTorneoYNumerar == null) return null
-    const abierto = esExposicionEstadoAbierto(exhibition)
-    const prompt = abierto
-      ? '¿Cerrar el torneo y asignar los números de catálogo en orden automático? Los números siguen el mismo orden que el PDF del catálogo.'
-      : '¿Volver a asignar los números de catálogo según el orden del PDF?'
-    const accionPrimaria = abierto ? 'Cerrar torneo y numerar' : 'Actualizar numeración'
+  function renderConfirmarNumerarModal() {
+    if (!confirmarNumerarOpen || onNumerarCatalogo == null) return null
+    const prompt =
+      '¿Asignar los números de catálogo en orden automático? Los números siguen el mismo orden que el PDF del catálogo.'
     return (
       <div
         className="anotacion-eliminar-overlay"
         role="presentation"
-        onClick={cerrarConfirmarCerrarNumerar}
+        onClick={cerrarConfirmarNumerar}
       >
         <div
           className="anotacion-tarjeta-dialog anotacion-eliminar-dialog anotacion-confirmar-cerrar-numerar-dialog"
@@ -1371,16 +1368,16 @@ export function VistaAnotacionExposicion({
             <button
               type="button"
               className="enrollment-modal__btn enrollment-modal__btn--secondary"
-              onClick={cerrarConfirmarCerrarNumerar}
+              onClick={cerrarConfirmarNumerar}
             >
               Cancelar
             </button>
             <button
               type="button"
               className="enrollment-modal__btn enrollment-modal__btn--primary"
-              onClick={() => void ejecutarConfirmarCerrarTorneoYNumerar()}
+              onClick={() => void ejecutarConfirmarNumerar()}
             >
-              {accionPrimaria}
+              Numerar
             </button>
           </footer>
         </div>
@@ -1758,35 +1755,27 @@ export function VistaAnotacionExposicion({
       {renderTarjetaEjemplarOverlay()}
       {renderEdicionCategoriaModal()}
       {renderEliminarEjemplarModal()}
-      {renderConfirmarCerrarNumerarModal()}
+      {renderConfirmarNumerarModal()}
 
       <section className="enrollment-modal__section enrollment-modal__section--table">
         <div className="enrollment-modal__section-head--table">
           <h3 className="enrollment-modal__section-title">Ejemplares anotados</h3>
           <div className="enrollment-modal__section-actions">
-            {onCerrarTorneoYNumerar ? (
+            {onNumerarCatalogo ? (
               <button
                 type="button"
                 className="enrollment-modal__btn enrollment-modal__btn--primary"
-                onClick={() => void handleCerrarTorneoYNumerarClick()}
+                onClick={() => void handleNumerarCatalogoClick()}
                 disabled={
                   catalogosCargando ||
-                  cerrarNumerarLoading ||
+                  numerarLoading ||
                   catalogosError != null ||
                   enrollments.length === 0 ||
                   idExposicion == null
                 }
-                title={
-                  esExposicionEstadoAbierto(exhibition)
-                    ? 'Cierra el torneo y asigna los n.º de catálogo en el orden del PDF (ADULTOS → grupos → razas → categorías → ejemplares, etc.)'
-                    : 'Vuelve a calcular los n.º de catálogo según el orden del PDF'
-                }
+                title="Asigna los n.º de catálogo en el orden del PDF (ADULTOS → grupos → razas → categorías → ejemplares, etc.)"
               >
-                {cerrarNumerarLoading
-                  ? 'Procesando…'
-                  : esExposicionEstadoAbierto(exhibition)
-                    ? 'Cerrar torneo y numerar'
-                    : 'Actualizar numeración'}
+                {numerarLoading ? 'Procesando…' : 'Numerar'}
               </button>
             ) : null}
             <button

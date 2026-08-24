@@ -242,15 +242,20 @@ export function eliminarCatalogo(idCatalogo) {
 }
 
 /**
- * Cierra el torneo (si estaba abierto) y asigna números de catálogo en orden PDF (solo tipo automático).
+ * Asigna números de catálogo en orden PDF (solo tipo automático). No cierra el torneo.
  * @param {number | string} idExposicion
  */
-export function cerrarTorneoYNumerarCatalogo(idExposicion) {
+export function numerarCatalogoAutomatico(idExposicion) {
   return request(
     'POST',
-    `/api/catalogos/exposicion/${encodeURIComponent(String(idExposicion))}/cerrar-y-numerar`,
+    `/api/catalogos/exposicion/${encodeURIComponent(String(idExposicion))}/numerar`,
     { body: {} },
   )
+}
+
+/** @deprecated Usar numerarCatalogoAutomatico */
+export function cerrarTorneoYNumerarCatalogo(idExposicion) {
+  return numerarCatalogoAutomatico(idExposicion)
 }
 
 // ─── EJEMPLARES ───────────────────────────────────────────────────────────────

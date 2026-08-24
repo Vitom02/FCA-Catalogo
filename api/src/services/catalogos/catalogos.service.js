@@ -18,6 +18,7 @@ const COLUMNS = [
   "fecha_insc",
 ];
 
+const ID_ESTADO_ABIERTO = 1;
 const ID_ESTADO_CERRADO = 2;
 const ID_ESTADO_FINALIZADO = 3;
 
@@ -54,7 +55,8 @@ function mapRow(row) {
 
 /**
  * Asigna `numero` 1…n en el mismo orden que el PDF del catálogo (`filasDetalleEnOrdenCatalogoPdf`).
- * Requiere exposición con numeración automática (2) y estado cerrado o finalizado.
+ * Requiere exposición con numeración automática (2) y torneo **abierto**.
+ * Con el catálogo cerrado o finalizado los números no se reasignan ni modifican.
  * @param {number | string} idExposicion
  */
 export async function aplicarNumeracionAutomaticaPorOrdenPdf(idExposicion) {
@@ -83,9 +85,9 @@ export async function aplicarNumeracionAutomaticaPorOrdenPdf(idExposicion) {
     throw err;
   }
   const est = Number(row.id_estado);
-  if (est !== ID_ESTADO_CERRADO && est !== ID_ESTADO_FINALIZADO) {
+  if (est !== ID_ESTADO_ABIERTO) {
     const err = new Error(
-      "El torneo debe estar cerrado o finalizado para asignar la numeración automática."
+      "El catálogo está cerrado o finalizado: los números de catálogo no se pueden reasignar."
     );
     err.code = "CATALOGOS_NUMERACION_ESTADO_INVALIDO";
     throw err;
@@ -531,6 +533,21 @@ export async function actualizar(idCatalogo, payload) {
     const idExpo = crow?.id_exposicion != null ? Number(crow.id_exposicion) : null;
     const nex = Number(crow?.numeros_extra);
     const numerosExtraCur = Number.isFinite(nex) && nex >= 1 ? nex : null;
+
+    if (idExpo != null && Number.isFinite(idExpo)) {
+      const exEst = await query(
+        `SELECT id_estado FROM web.exposiciones WHERE id_exposicion = $1`,
+        [idExpo]
+      );
+      const est = Number(exEst.rows[0]?.id_estado);
+      if (est === ID_ESTADO_CERRADO || est === ID_ESTADO_FINALIZADO) {
+        const err = new Error(
+          "El catálogo está cerrado o finalizado: los números de catálogo no se pueden modificar."
+        );
+        err.code = "CATALOGOS_NUMERO_CATALOGO_CERRADO";
+        throw err;
+      }
+    }
 
     const newNum = optInt(payload.numero);
     if (numerosExtraCur != null && newNum != null) {

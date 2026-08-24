@@ -188,6 +188,10 @@ export async function actualizar(req, res) {
       res.status(400).json({ error: err.message });
       return;
     }
+    if (err && err.code === "CATALOGOS_NUMERO_CATALOGO_CERRADO") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (err.code === "CATALOGOS_FECHA_INVALIDA") {
       res.status(400).json({ error: err.message });
       return;
@@ -216,12 +220,10 @@ export async function eliminar(req, res) {
   }
 }
 
-const ID_ESTADO_ABIERTO = 1;
-
 /**
- * Cierra el torneo (si aún estaba abierto) y asigna n.º de catálogo en orden PDF (solo numeración automática).
+ * Asigna n.º de catálogo en orden PDF (solo numeración automática). No cierra el torneo.
  */
-export async function cerrarTorneoYNumerar(req, res) {
+export async function numerarCatalogo(req, res) {
   try {
     const id = parseId(req.params.idExposicion);
     if (!id) {
@@ -240,8 +242,12 @@ export async function cerrarTorneoYNumerar(req, res) {
       });
       return;
     }
-    if (Number(expo.id_estado) === ID_ESTADO_ABIERTO) {
-      await exposicionesService.actualizar(id, { cerrado_manual: true });
+    if (Number(expo.id_estado) !== 1) {
+      res.status(400).json({
+        error:
+          "El catálogo está cerrado o finalizado: los números no se pueden reasignar.",
+      });
+      return;
     }
     const r = await catalogosService.aplicarNumeracionAutomaticaPorOrdenPdf(id);
     res.json({ ok: true, numerados: r.total });
@@ -261,4 +267,9 @@ export async function cerrarTorneoYNumerar(req, res) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
+}
+
+/** @deprecated Usar numerarCatalogo; ya no cierra el torneo. */
+export async function cerrarTorneoYNumerar(req, res) {
+  return numerarCatalogo(req, res);
 }

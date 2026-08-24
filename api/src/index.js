@@ -53,6 +53,10 @@ app.get(
   catalogosController.resumenAgrupadoPorExposicion
 );
 app.post(
+  "/api/catalogos/exposicion/:idExposicion/numerar",
+  catalogosController.numerarCatalogo
+);
+app.post(
   "/api/catalogos/exposicion/:idExposicion/cerrar-y-numerar",
   catalogosController.cerrarTorneoYNumerar
 );

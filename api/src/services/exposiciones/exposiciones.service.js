@@ -1,5 +1,4 @@
 import { query } from "../../database/index.js";
-import { aplicarNumeracionAutomaticaPorOrdenPdf } from "../catalogos/catalogos.service.js";
 
 /** Coinciden con web.exposiciones_estados (migración). */
 const ID_ESTADO_ABIERTO = 1;
@@ -96,19 +95,6 @@ const SELECT_BASE = `
  * **Sin club**: vigente → Abierto; post `hasta` → Finalizado.
  */
 export async function aplicarReglasEstadoPorClubOrganizador() {
-  const before = await query(
-    `SELECT id_exposicion, id_estado, tipo_numeracion FROM exposiciones`
-  );
-  const beforeMap = new Map(
-    before.rows.map((r) => [
-      Number(r.id_exposicion),
-      {
-        id_estado: Number(r.id_estado),
-        tipo_numeracion: Number(r.tipo_numeracion),
-      },
-    ])
-  );
-
   await query(
     `WITH e2 AS (
         SELECT
@@ -193,26 +179,6 @@ export async function aplicarReglasEstadoPorClubOrganizador() {
         )`,
     [ID_ESTADO_ABIERTO, ID_ESTADO_CERRADO, ID_ESTADO_FINALIZADO]
   );
-
-  const after = await query(`SELECT id_exposicion, id_estado FROM exposiciones`);
-  for (const row of after.rows) {
-    const idExpo = Number(row.id_exposicion);
-    const prev = beforeMap.get(idExpo);
-    if (!prev) continue;
-    const prevEst = prev.id_estado;
-    const nowEst = Number(row.id_estado);
-    if (prevEst !== ID_ESTADO_ABIERTO) continue;
-    if (nowEst !== ID_ESTADO_CERRADO && nowEst !== ID_ESTADO_FINALIZADO) continue;
-    if (Number(prev.tipo_numeracion) !== 2) continue;
-    try {
-      await aplicarNumeracionAutomaticaPorOrdenPdf(idExpo);
-    } catch (err) {
-      console.error(
-        `[exposiciones] numeración automática al cerrar: id_exposicion=${idExpo}`,
-        err
-      );
-    }
-  }
 }
 
 function formatPgDate(value) {

@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   ApiError,
   listarExposicionesCatalogosPorExposicion,
 } from '../../apiConnect.jsx'
 import { isSameExhibitionRow } from '../../datos/exhibitionsTable.js'
 import { BusquedaSelectTipo } from '../comun/BusquedaSelectTipo.jsx'
+import { clubesKennelsYClubes, esClubKennel } from '../../utilidades/mapClubesApi.js'
 
 const EXPO_ID_TIPO_DEFAULT = 1
 
@@ -107,12 +108,25 @@ export function ModalAgregarExposicion({
 }) {
   const titleId = useId()
   const [form, setForm] = useState(emptyForm)
-  const [textoClubPrincipal, setTextoClubPrincipal] = useState('')
+  const [textoPrincipalKennel, setTextoPrincipalKennel] = useState('')
+  const [textoPrincipalClub, setTextoPrincipalClub] = useState('')
   const [filasCoorganizador, setFilasCoorganizador] = useState(
-    /** @type {{ rowId: number, id: string, inputText: string }[]} */ ([]),
+    /** @type {{ rowId: number, id: string, textoKennel: string, textoClub: string }[]} */ ([]),
   )
   const coorgRowSeqRef = useRef(0)
   const [guardando, setGuardando] = useState(false)
+
+  const { kennels, clubs } = useMemo(() => clubesKennelsYClubes(clubes), [clubes])
+
+  const clubPrincipal = useMemo(() => {
+    const id = form.kennelId
+    if (!id) return null
+    return kennels.find((c) => String(c.id_club) === String(id))
+      ?? clubs.find((c) => String(c.id_club) === String(id))
+      ?? null
+  }, [form.kennelId, kennels, clubs])
+
+  const principalEsKennel = clubPrincipal?.es_kennel === true
 
   const idExposicionEdicion =
     initialRow && /** @type {{ id_exposicion?: number }} */ (initialRow).id_exposicion != null
@@ -123,7 +137,8 @@ export function ModalAgregarExposicion({
     if (!open) return
     if (!initialRow) {
       setForm(emptyForm())
-      setTextoClubPrincipal('')
+      setTextoPrincipalKennel('')
+      setTextoPrincipalClub('')
       setFilasCoorganizador([])
       coorgRowSeqRef.current = 0
       return
@@ -131,11 +146,18 @@ export function ModalAgregarExposicion({
     const sf = rowToForm(initialRow)
     setForm(sf)
     const kid = sf.kennelId
-    const lab =
+    const item =
       kid && clubes.length > 0
-        ? clubes.find((c) => String(c.id_club) === String(kid))?.club ?? ''
-        : ''
-    setTextoClubPrincipal(lab)
+        ? clubes.find((c) => String(/** @type {{ id_club: number }} */ (c).id_club) === String(kid))
+        : null
+    const lab = item ? String(/** @type {{ club: string }} */ (item).club ?? '').trim() : ''
+    if (item && esClubKennel(item)) {
+      setTextoPrincipalKennel(lab)
+      setTextoPrincipalClub('')
+    } else {
+      setTextoPrincipalKennel('')
+      setTextoPrincipalClub(lab)
+    }
     coorgRowSeqRef.current = 0
     const idExpo = /** @type {{ id_exposicion?: number }} */ (initialRow).id_exposicion
     if (idExpo != null && Number.isFinite(Number(idExpo))) {
@@ -150,11 +172,19 @@ export function ModalAgregarExposicion({
             : []
           const nuevasFilas = ids.map((id) => {
             coorgRowSeqRef.current += 1
+            const item = clubes.find(
+              (c) => Number(/** @type {{ id_club?: unknown }} */ (c).id_club) === id,
+            )
+            const nombre =
+              item != null
+                ? String(/** @type {{ club?: unknown }} */ (item).club ?? '').trim() || `#${id}`
+                : `#${id}`
+            const esK = item != null && esClubKennel(item)
             return {
               rowId: coorgRowSeqRef.current,
               id: String(id),
-              inputText:
-                clubes.find((c) => c.id_club === id)?.club ?? `#${id}`,
+              textoKennel: esK ? nombre : '',
+              textoClub: esK ? '' : nombre,
             }
           })
           setFilasCoorganizador(nuevasFilas)
@@ -163,28 +193,90 @@ export function ModalAgregarExposicion({
     } else {
       setFilasCoorganizador([])
     }
-  }, [open, initialRow])
+  }, [open, initialRow, clubes])
 
   if (!open) return null
 
   const principalNum = form.kennelId ? Number(form.kennelId) : NaN
 
-  function clubesItemsParaCoorg(rowId) {
-    return clubes.filter((c) => {
+  function idsCoorganizadoresUsados(excluirRowId) {
+    const seen = new Set()
+    for (const f of filasCoorganizador) {
+      if (excluirRowId != null && f.rowId === excluirRowId) continue
+      const n = parseInt(String(f.id).trim(), 10)
+      if (Number.isFinite(n)) seen.add(n)
+    }
+    return seen
+  }
+
+  function itemsKennelParaCoorg(rowId) {
+    const usados = idsCoorganizadoresUsados(rowId)
+    return kennels.filter((c) => {
       if (Number.isFinite(principalNum) && c.id_club === principalNum) return false
-      for (const f of filasCoorganizador) {
-        if (f.rowId === rowId) continue
-        if (f.id && Number(f.id) === c.id_club) return false
-      }
+      if (usados.has(c.id_club)) return false
       return true
     })
+  }
+
+  function itemsClubParaCoorg(rowId) {
+    const usados = idsCoorganizadoresUsados(rowId)
+    return clubs.filter((c) => {
+      if (Number.isFinite(principalNum) && c.id_club === principalNum) return false
+      if (usados.has(c.id_club)) return false
+      return true
+    })
+  }
+
+  function filaCoorgEsKennel(fila) {
+    const item = fila.id
+      ? kennels.find((c) => String(c.id_club) === String(fila.id))
+        ?? clubs.find((c) => String(c.id_club) === String(fila.id))
+      : null
+    if (item) return item.es_kennel === true
+    return Boolean(fila.textoKennel.trim() && !fila.textoClub.trim())
+  }
+
+  function seleccionarPrincipalDesdeKennel(id, texto) {
+    setForm((f) => ({ ...f, kennelId: id }))
+    setTextoPrincipalKennel(texto)
+    setTextoPrincipalClub('')
+    const n = id ? Number(id) : NaN
+    if (Number.isFinite(n)) {
+      setFilasCoorganizador((prev) =>
+        prev.map((r) =>
+          r.id === String(n) ? { ...r, id: '', textoKennel: '', textoClub: '' } : r,
+        ),
+      )
+    }
+  }
+
+  function seleccionarPrincipalDesdeClub(id, texto) {
+    setForm((f) => ({ ...f, kennelId: id }))
+    setTextoPrincipalClub(texto)
+    setTextoPrincipalKennel('')
+    const n = id ? Number(id) : NaN
+    if (Number.isFinite(n)) {
+      setFilasCoorganizador((prev) =>
+        prev.map((r) =>
+          r.id === String(n) ? { ...r, id: '', textoKennel: '', textoClub: '' } : r,
+        ),
+      )
+    }
+  }
+
+  function seleccionarCoorgDesdeKennel(rowId, id, texto) {
+    patchFilaCoorganizador(rowId, { id, textoKennel: texto, textoClub: '' })
+  }
+
+  function seleccionarCoorgDesdeClub(rowId, id, texto) {
+    patchFilaCoorganizador(rowId, { id, textoKennel: '', textoClub: texto })
   }
 
   function agregarFilaCoorganizador() {
     coorgRowSeqRef.current += 1
     setFilasCoorganizador((prev) => [
       ...prev,
-      { rowId: coorgRowSeqRef.current, id: '', inputText: '' },
+      { rowId: coorgRowSeqRef.current, id: '', textoKennel: '', textoClub: '' },
     ])
   }
 
@@ -352,64 +444,126 @@ export function ModalAgregarExposicion({
           </div>
 
           <div className="expo-add-modal__field expo-add-modal__field--compact">
-            <span className="expo-add-modal__label">Clubes</span>
+            <span className="expo-add-modal__label">Organizador</span>
             <div className="expo-add-modal__club-grid">
-              <div className="expo-add-modal__club-grid-row expo-add-modal__club-grid-row--principal">
-                <BusquedaSelectTipo
-                  items={clubes}
-                  getId={(c) => /** @type {{ id_club: number }} */ (c).id_club}
-                  getLabel={(c) => /** @type {{ club: string }} */ (c).club}
-                  valueId={form.kennelId}
-                  inputText={textoClubPrincipal}
-                  onValueIdChange={(id) => {
-                    setForm((f) => ({ ...f, kennelId: id }))
-                    const n = id ? Number(id) : NaN
-                    if (Number.isFinite(n)) {
-                      setFilasCoorganizador((prev) =>
-                        prev.map((r) =>
-                          r.id === String(n) ? { ...r, id: '', inputText: '' } : r,
-                        ),
-                      )
-                    }
-                  }}
-                  onInputTextChange={setTextoClubPrincipal}
-                  ariaLabel="Club organizador"
-                  placeholder="Club organizador…"
-                  className="expo-add-modal__input expo-add-modal__input--compact"
-                  scopeSelector={FORM_SCOPE}
-                  disabled={guardando}
-                />
-                <span className="expo-add-modal__club-grid-spacer" aria-hidden />
-              </div>
-              {filasCoorganizador.map((fila) => (
-                <div key={fila.rowId} className="expo-add-modal__club-grid-row">
+              <div className="expo-add-modal__organizador-split">
+                <div className="expo-add-modal__club-split-item">
+                  <span className="expo-add-modal__club-sublabel">Kennel</span>
                   <BusquedaSelectTipo
-                    items={clubesItemsParaCoorg(fila.rowId)}
+                    items={kennels}
                     getId={(c) => /** @type {{ id_club: number }} */ (c).id_club}
                     getLabel={(c) => /** @type {{ club: string }} */ (c).club}
-                    valueId={fila.id}
-                    inputText={fila.inputText}
-                    onValueIdChange={(id) => patchFilaCoorganizador(fila.rowId, { id })}
-                    onInputTextChange={(text) =>
-                      patchFilaCoorganizador(fila.rowId, { inputText: text })
-                    }
-                    ariaLabel="Co-organizador"
-                    placeholder="Co-organizador…"
+                    valueId={principalEsKennel ? form.kennelId : ''}
+                    inputText={textoPrincipalKennel}
+                    onValueIdChange={(id) => {
+                      if (!id) {
+                        if (principalEsKennel) seleccionarPrincipalDesdeKennel('', '')
+                        return
+                      }
+                      const item = kennels.find((c) => String(c.id_club) === String(id))
+                      seleccionarPrincipalDesdeKennel(id, item ? item.club : '')
+                    }}
+                    onInputTextChange={setTextoPrincipalKennel}
+                    ariaLabel="Kennel organizador"
+                    placeholder="Buscar kennel…"
                     className="expo-add-modal__input expo-add-modal__input--compact"
                     scopeSelector={FORM_SCOPE}
-                    disabled={guardando || !form.kennelId}
-                  />
-                  <button
-                    type="button"
-                    className="expo-add-modal__btn-minus"
-                    onClick={() => quitarFilaCoorganizador(fila.rowId)}
                     disabled={guardando}
-                    aria-label="Quitar co-organizador"
-                  >
-                    −
-                  </button>
+                  />
                 </div>
-              ))}
+                <div className="expo-add-modal__club-split-item">
+                  <span className="expo-add-modal__club-sublabel">Club</span>
+                  <BusquedaSelectTipo
+                    items={clubs}
+                    getId={(c) => /** @type {{ id_club: number }} */ (c).id_club}
+                    getLabel={(c) => /** @type {{ club: string }} */ (c).club}
+                    valueId={!principalEsKennel ? form.kennelId : ''}
+                    inputText={textoPrincipalClub}
+                    onValueIdChange={(id) => {
+                      if (!id) {
+                        if (!principalEsKennel && form.kennelId) {
+                          seleccionarPrincipalDesdeClub('', '')
+                        }
+                        return
+                      }
+                      const item = clubs.find((c) => String(c.id_club) === String(id))
+                      seleccionarPrincipalDesdeClub(id, item ? item.club : '')
+                    }}
+                    onInputTextChange={setTextoPrincipalClub}
+                    ariaLabel="Club organizador"
+                    placeholder="Buscar club…"
+                    className="expo-add-modal__input expo-add-modal__input--compact"
+                    scopeSelector={FORM_SCOPE}
+                    disabled={guardando}
+                  />
+                </div>
+              </div>
+              {filasCoorganizador.map((fila) => {
+                const coorgKennel = filaCoorgEsKennel(fila)
+                return (
+                  <div key={fila.rowId} className="expo-add-modal__club-grid-row">
+                    <div className="expo-add-modal__organizador-split">
+                      <div className="expo-add-modal__club-split-item">
+                        <span className="expo-add-modal__club-sublabel">Kennel</span>
+                        <BusquedaSelectTipo
+                          items={itemsKennelParaCoorg(fila.rowId)}
+                          getId={(c) => /** @type {{ id_club: number }} */ (c).id_club}
+                          getLabel={(c) => /** @type {{ club: string }} */ (c).club}
+                          valueId={coorgKennel ? fila.id : ''}
+                          inputText={fila.textoKennel}
+                          onValueIdChange={(id) => {
+                            const item = kennels.find((c) => String(c.id_club) === String(id))
+                            seleccionarCoorgDesdeKennel(
+                              fila.rowId,
+                              id,
+                              item ? item.club : '',
+                            )
+                          }}
+                          onInputTextChange={(text) =>
+                            patchFilaCoorganizador(fila.rowId, { textoKennel: text })
+                          }
+                          ariaLabel="Co-organizador kennel"
+                          placeholder="Kennel…"
+                          className="expo-add-modal__input expo-add-modal__input--compact"
+                          scopeSelector={FORM_SCOPE}
+                          disabled={guardando || !form.kennelId}
+                        />
+                      </div>
+                      <div className="expo-add-modal__club-split-item">
+                        <span className="expo-add-modal__club-sublabel">Club</span>
+                        <BusquedaSelectTipo
+                          items={itemsClubParaCoorg(fila.rowId)}
+                          getId={(c) => /** @type {{ id_club: number }} */ (c).id_club}
+                          getLabel={(c) => /** @type {{ club: string }} */ (c).club}
+                          valueId={!coorgKennel ? fila.id : ''}
+                          inputText={fila.textoClub}
+                          onValueIdChange={(id) => {
+                            const item = clubs.find((c) => String(c.id_club) === String(id))
+                            seleccionarCoorgDesdeClub(fila.rowId, id, item ? item.club : '')
+                          }}
+                          onInputTextChange={(text) =>
+                            patchFilaCoorganizador(fila.rowId, { textoClub: text })
+                          }
+                          ariaLabel="Co-organizador club"
+                          placeholder="Club…"
+                          className="expo-add-modal__input expo-add-modal__input--compact"
+                          scopeSelector={FORM_SCOPE}
+                          disabled={guardando || !form.kennelId}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="expo-add-modal__btn-minus"
+                      onClick={() => quitarFilaCoorganizador(fila.rowId)}
+                      disabled={guardando}
+                      aria-label="Quitar co-organizador"
+                    >
+                      −
+                    </button>
+                  </div>
+                )
+              })}
               <button
                 type="button"
                 className="expo-add-modal__btn-add-club-row"
@@ -417,7 +571,7 @@ export function ModalAgregarExposicion({
                 disabled={guardando || !form.kennelId}
                 aria-label="Agregar co-organizador"
               >
-                + club
+                + co-organizador
               </button>
             </div>
           </div>

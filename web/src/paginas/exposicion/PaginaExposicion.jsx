@@ -3,7 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   ApiError,
   actualizarCatalogo,
-  cerrarTorneoYNumerarCatalogo,
+  numerarCatalogoAutomatico,
   crearCatalogo,
   eliminarCatalogo,
   listarCatalogosConteosPorExposicion,
@@ -129,17 +129,17 @@ export function PaginaExposicion({
     [exhibition],
   )
 
-  const handleCerrarTorneoYNumerar = useCallback(async () => {
+  const handleNumerarCatalogo = useCallback(async () => {
     if (idExposicion == null) return
     try {
-      await cerrarTorneoYNumerarCatalogo(idExposicion)
+      await numerarCatalogoAutomatico(idExposicion)
       await refreshCatalogos()
       await recargarFilasExposiciones()
     } catch (e) {
       window.alert(
         e instanceof ApiError
           ? e.message
-          : 'No se pudo cerrar el torneo ni asignar la numeración.',
+          : 'No se pudo asignar la numeración del catálogo.',
       )
     }
   }, [idExposicion, refreshCatalogos, recargarFilasExposiciones])
@@ -243,6 +243,8 @@ export function PaginaExposicion({
       const esNe = Number.isFinite(nex) && nex >= 1
       const rawNum = entry.numero
       if (
+        exhibition != null &&
+        esExposicionEstadoAbierto(exhibition) &&
         !esNe &&
         rawNum !== undefined &&
         rawNum !== null &&
@@ -304,8 +306,10 @@ export function PaginaExposicion({
         onAddEnrollment={handleAddEnrollment}
         onUpdateEnrollment={handleUpdateEnrollment}
         onRemoveEnrollment={handleRemoveEnrollment}
-        onCerrarTorneoYNumerar={
-          numeracionAutomatica ? handleCerrarTorneoYNumerar : undefined
+        onNumerarCatalogo={
+          numeracionAutomatica && esExposicionEstadoAbierto(exhibition)
+            ? handleNumerarCatalogo
+            : undefined
         }
         catalogosCargando={catalogosLoad === 'loading'}
         catalogosError={catalogosError}
